@@ -18,14 +18,19 @@ def generate_launch_description():
         package=pkg,
         executable="pcl_processor",
         name='pcl_process',    # This is the first line in the config file 
+        parameters=[
+            {'distance_filter_threshold':       '0.0005',            # Distance to filter grinded area
+            'neighbor_threshold':               '5',                # filter outlier with #of neighbour point threshold
+            'plate_thickness':                  '2',                # in mm
+            }
+        ]
     )
 
-    '''
     # UR Trajectory Controller
-
+    '''
     trajectory_control = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            [os.path.join(get_package_share_directory(pkg),'launch','ur_surface_measurement.launch.py')])
+            [os.path.join(get_package_share_directory('ur_trajectory_controller'),'launch','ur_surface_measurement.launch.py')])
     )
     '''
     ld = LaunchDescription()

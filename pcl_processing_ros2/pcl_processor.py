@@ -40,7 +40,7 @@ class PCLprocessor(Node):
     def init_parameters(self) -> None:
         self.declare_parameter('distance_filter_threshold',     '0.0005')    # filter for segmenting grinded area
         self.declare_parameter('neighbor_threshold',            '5'     )    # number of required neighbour points to remove outliers
-        self.declare_parameter('plate_thickness',               '2'     )    # in mm
+        self.declare_parameter('plate_thickness',               '0.002'     )    # in m
 
         self.distance_filter_threshold = float(self.get_parameter('distance_filter_threshold').get_parameter_value().string_value)
         self.neighbor_threshold = float(self.get_parameter('neighbor_threshold').get_parameter_value().string_value) 
@@ -68,13 +68,21 @@ class PCLprocessor(Node):
 
             #self.start_visualization_thread(self.changed_pcl)
 
+            # Project the points onto the plane
+            plane_normal, plane_centroid = self.fit_plane_to_pcd_pca(self.changed_pcl)
+            points = np.asarray(self.changed_pcl.points)
+            projected_points = self.project_points_onto_plane(points, plane_normal, plane_centroid)
+
+            # Create a new point cloud for the projected points
+            self.changed_pcl.points = o3d.utility.Vector3dVector(projected_points)
+
             # Create mesh and calculate volume
             changed_mesh_surf = self.create_mesh_from_point_cloud(self.changed_pcl)
 
             self.start_visualization_thread(changed_mesh_surf)
 
             self.lost_volume = self.calculate_lost_volume_from_changedpcl(changed_mesh_surf)  
-            self.get_logger().info(f"Lost Volume: {self.lost_volume} cubic mm")
+            self.get_logger().info(f"Lost Volume: {self.lost_volume} m^3")
 
             # Prepare and publish volume message
             msg_stamped = Float32Stamped()
@@ -130,6 +138,30 @@ class PCLprocessor(Node):
         filtered_mesh_missing.points = o3d.utility.Vector3dVector(valid_vertices)
 
         return filtered_mesh_missing
+
+    def fit_plane_to_pcd_pca(self, pcd):
+        """Fit a plane to a cluster of points using PCA."""
+        points = np.asarray(pcd.points)
+
+        # Perform PCA
+        pca = PCA(n_components=3)
+        pca.fit(points)
+
+        # Get the normal to the plane (third principal component)
+        plane_normal = pca.components_[2]  # The normal to the plane (least variance direction)
+
+        # The centroid is the mean of the points
+        centroid = np.mean(points, axis=0)
+
+        return plane_normal, centroid
+
+    def project_points_onto_plane(self, points, plane_normal, plane_centroid):
+        """Project points onto the plane defined by the normal and a point."""
+        vectors = points - plane_centroid  # Vector from point to plane_centroid
+        distances = np.dot(vectors, plane_normal)  # Project onto the normal
+        projected_points = points - np.outer(distances, plane_normal)  # Subtract projection along the normal
+        return projected_points
+
 
     def calculate_lost_volume_from_changedpcl(self, mesh_missing):
         reference_area = mesh_missing.get_surface_area()

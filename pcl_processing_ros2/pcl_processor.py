@@ -32,6 +32,14 @@ class PCLprocessor(Node):
         self.changed_pcl = []
         self.lost_volume = None
 
+        #PCL Collector
+        self.alpha = 0.005
+        self.meshes: list[o3d.geometry.TriangleMesh] = []
+        self.mesh_folder_path = os.path.join(os.getcwd(), 'meshes')
+        if not os.path.exists(self.mesh_folder_path):
+            os.mkdir(self.mesh_folder_path)
+        self.mesh_filename = 'turbine_blade'
+
         # Visualization threading
         self.lock = threading.Lock()
         self.visualization_thread = None
@@ -62,8 +70,19 @@ class PCLprocessor(Node):
 
         elif len(self.combined_pcl_initial) > 0 and len(self.combined_pcl_postgrind) < 1:
             self.combined_pcl_postgrind.append(o3d_pcl)
-            self.get_logger().info('Processing postgrind')
+
+            #Write PCL Pair to folder
+            pcl_path = os.path.join(self.mesh_folder_path, f'pcl_{self.mesh_filename}_initial_{str(datetime.now()).split(".")[0]}.ply')
+            self.get_logger().info(f"Saving initial pointcloud to: {pcl_path}")
+            o3d.io.write_point_cloud(pcl_path, self.combined_pcl_initial)
+
+            pcl_path = os.path.join(self.mesh_folder_path, f'pcl_{self.mesh_filename}_postgrind_{str(datetime.now()).split(".")[0]}.ply')
+            self.get_logger().info(f"Saving postgrind pointcloud to: {pcl_path}")
+            o3d.io.write_point_cloud(pcl_path, self.combined_pcl_postgrind)
+            self.get_logger().info("Saved pointcloud pair")
+
             #Filter for grinded area and visualize
+            self.get_logger().info('Processing postgrind')
             self.changed_pcl = self.filter_changedpointson_mesh(self.combined_pcl_initial[0], self.combined_pcl_postgrind[0])
 
             #self.start_visualization_thread(self.changed_pcl)
@@ -90,7 +109,7 @@ class PCLprocessor(Node):
             msg_stamped.header = Header()
             self.publisher_volume.publish(msg_stamped)
 
-            #After publish, set postgrind as initial and empty postgrind
+            #After publish/save, set postgrind as initial and empty postgrind
             self.combined_pcl_initial = copy.deepcopy(self.combined_pcl_postgrind)
             self.combined_pcl_postgrind = []
 
@@ -174,17 +193,65 @@ class PCLprocessor(Node):
         jitter = np.random.normal(scale=1e-8, size=points.shape)
         pcd.points = o3d.utility.Vector3dVector(points + jitter)
         pcd.estimate_normals()
-
         pcd.orient_normals_consistent_tangent_plane(30)
 
+
+        # Alpha shape
+        # Iteratively adjust radii until a suitable mesh is created
+        iteration = 0
+        max_iterations = 10
+        step = 1.2
+        alpha = 0.001  # Adjust this parameter for alpha shape detail
+        direction = "multiply"  # Start by multiplying alpha
+        previous_surface_area = 0
+
+        while iteration < max_iterations:
+            try:
+                # Try Alpha Shape for mesh creation with the current alpha value
+                #print(f'Attempting mesh creation with alpha: {alpha:.2g}')
+                mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha)
+
+                # Compute the surface area of the mesh
+                current_surface_area = mesh.get_surface_area()
+                #print(f"Current surface area: {current_surface_area}")
+
+                # Check if the surface area is below the threshold or has decreased
+                if current_surface_area > previous_surface_area:
+                    # Surface area has increased, update previous_surface_area
+                    previous_surface_area = current_surface_area
+
+                else:
+                    # If surface area decreased or did not improve, switch the direction
+                    if direction == "multiply":
+                        direction = "divide"
+                    else:
+                        direction = "multiply"
+
+                # Update alpha based on the current direction
+                if direction == "multiply":
+                    alpha *= step
+                else:
+                    alpha /= step
+
+
+            except Exception as e:
+                print(f"Alpha shape failed on iteration {iteration} with error: {e}")
+
+            # Increment iteration counter
+            iteration += 1
+
+        print(f"Mesh created successfully with surface area {current_surface_area} and alpha {alpha:.2g}")
+
+
+        '''
+        #ball pivoting
         distances = pcd.compute_nearest_neighbor_distance()
         avg_dist = np.mean(distances)
         radii = [0.05 * avg_dist, 0.1 * avg_dist, 0.25 * avg_dist, 0.4 * avg_dist, 0.7 * avg_dist, 1 * avg_dist, 1.5 * avg_dist, 2 * avg_dist, 3 * avg_dist] #can reduce to reduce computation
         r = o3d.utility.DoubleVector(radii)
-
-        #ball pivoting
         mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pcd, r)
-
+        '''
+        
         return mesh
 
 

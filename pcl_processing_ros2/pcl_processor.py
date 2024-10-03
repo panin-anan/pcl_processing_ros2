@@ -219,9 +219,9 @@ class PCLprocessor(Node):
                 if current_surface_area > previous_surface_area:
                     # Surface area has increased, update previous_surface_area
                     previous_surface_area = current_surface_area
-
                 else:
                     # If surface area decreased or did not improve, switch the direction
+                    previous_surface_area = current_surface_area
                     if direction == "multiply":
                         direction = "divide"
                     else:
@@ -241,8 +241,6 @@ class PCLprocessor(Node):
             iteration += 1
 
         print(f"Mesh created successfully with surface area {current_surface_area} and alpha {alpha:.2g}")
-
-
         '''
         #ball pivoting
         distances = pcd.compute_nearest_neighbor_distance()

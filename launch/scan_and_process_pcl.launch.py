@@ -19,8 +19,8 @@ def generate_launch_description():
         executable="pcl_processor",
         name='pcl_process',    # This is the first line in the config file 
         parameters=[
-            {'distance_filter_threshold':       '0.0005',            # Distance to filter grinded area
-            'neighbor_threshold':               '5',                # filter outlier with #of neighbour point threshold
+            {'distance_filter_threshold':       '0.0003',            # Distance to filter grinded area. do not go near #50-80 micron on line axis, 200 micron on feed axis of rate 30 second
+            'neighbor_threshold':               '10',                # filter outlier with #of neighbour point threshold
             'plate_thickness':                  '2',                # in mm
             }
         ]

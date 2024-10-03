@@ -13,6 +13,21 @@ import numpy as np
 import threading
 import copy
 from scipy.spatial import cKDTree
+import os
+from scipy.spatial import cKDTree, Delaunay
+import signal
+import sys
+import time
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+
+from pcl_processing_ros2.mesh_calculations import (
+    filter_project_points_by_plane,
+    filter_missing_points_by_yz,
+    create_bbox_from_pcl,
+    project_points_onto_plane,
+    sort_largest_cluster
+)
 
 
 class PCLprocessor(Node):
@@ -69,9 +84,13 @@ class PCLprocessor(Node):
             self.start_visualization_thread(self.combined_pcl_initial[0])
 
         elif len(self.combined_pcl_initial) > 0 and len(self.combined_pcl_postgrind) < 1:
+            self.get_logger().info('Processing postgrind')
+
             self.combined_pcl_postgrind.append(o3d_pcl)
 
+            self.get_logger().info('PCL saved to postgrind')
             #Write PCL Pair to folder
+            '''
             pcl_path = os.path.join(self.mesh_folder_path, f'pcl_{self.mesh_filename}_initial_{str(datetime.now()).split(".")[0]}.ply')
             self.get_logger().info(f"Saving initial pointcloud to: {pcl_path}")
             o3d.io.write_point_cloud(pcl_path, self.combined_pcl_initial)
@@ -80,27 +99,40 @@ class PCLprocessor(Node):
             self.get_logger().info(f"Saving postgrind pointcloud to: {pcl_path}")
             o3d.io.write_point_cloud(pcl_path, self.combined_pcl_postgrind)
             self.get_logger().info("Saved pointcloud pair")
+            '''
 
-            #Filter for grinded area and visualize
-            self.get_logger().info('Processing postgrind')
-            self.changed_pcl = self.filter_changedpointson_mesh(self.combined_pcl_initial[0], self.combined_pcl_postgrind[0])
+            #filter point by plane and project onto it
+            self.combined_pcl_initial[0], mesh1_plane_normal, mesh1_plane_centroid = filter_project_points_by_plane(self.combined_pcl_initial[0], distance_threshold=0.0006)
+            self.combined_pcl_postgrind[0], mesh2_plane_normal, mesh2_plane_centroid = filter_project_points_by_plane(self.combined_pcl_postgrind[0], distance_threshold=0.0006)
 
-            #self.start_visualization_thread(self.changed_pcl)
+            self.get_logger().info('PCL Projected on plane')
 
-            # Project the points onto the plane
-            plane_normal, plane_centroid = self.fit_plane_to_pcd_pca(self.changed_pcl)
-            points = np.asarray(self.changed_pcl.points)
-            projected_points = self.project_points_onto_plane(points, plane_normal, plane_centroid)
+            # Check alignment
+            cos_angle = np.dot(mesh1_plane_normal, mesh2_plane_normal) / (np.linalg.norm(mesh1_plane_normal) * np.linalg.norm(mesh2_plane_normal))
+            angle = np.arccos(np.clip(cos_angle, -1.0, 1.0)) * 180 / np.pi
+            if abs(angle) > 10:     #10 degree misalignment throw error
+                raise ValueError(f"Plane normals differ too much: {angle} degrees")
 
-            # Create a new point cloud for the projected points
-            self.changed_pcl.points = o3d.utility.Vector3dVector(projected_points)
+            projected_points_mesh2 = project_points_onto_plane(np.asarray(self.combined_pcl_postgrind[0].points), mesh1_plane_normal, mesh1_plane_centroid)
+            self.combined_pcl_postgrind[0].points = o3d.utility.Vector3dVector(projected_points_mesh2)
 
-            # Create mesh and calculate volume
-            changed_mesh_surf = self.create_mesh_from_point_cloud(self.changed_pcl)
 
-            self.start_visualization_thread(changed_mesh_surf)
+            mesh1_colored = self.combined_pcl_initial[0].paint_uniform_color([1, 0, 0])  # Red color
+            mesh2_colored = self.combined_pcl_postgrind[0].paint_uniform_color([0, 1, 0])  # Green color
 
-            self.lost_volume = self.calculate_lost_volume_from_changedpcl(changed_mesh_surf)  
+            self.get_logger().info('Filtering for changes in pcl')
+            self.changed_pcl = filter_missing_points_by_yz(self.combined_pcl_initial[0], self.combined_pcl_postgrind[0], y_threshold=0.0002, z_threshold=0.0001)
+            # after filter difference
+            self.changed_pcl.paint_uniform_color([0, 0, 1])  # Blue color for changed surface mesh
+            # after sorting
+            self.changed_pcl = sort_largest_cluster(self.changed_pcl, eps=0.0005, min_points=30, remove_outliers=True)
+
+            self.start_visualization_thread(self.changed_pcl)
+            #area from bounding box
+            width, height, area = create_bbox_from_pcl(self.changed_pcl)
+
+
+            self.lost_volume = area * self.plate_thickness
             self.get_logger().info(f"Lost Volume: {self.lost_volume} m^3")
 
             # Prepare and publish volume message
@@ -123,40 +155,6 @@ class PCLprocessor(Node):
         self.visualization_thread = threading.Thread(target=self.visualize_mesh, args=(pcl,))
         self.visualization_thread.start()
 
-    def filter_changedpointson_mesh(self, mesh_before, mesh_after):
-        points_before = np.asarray(mesh_before.points)
-        points_after = np.asarray(mesh_after.points)
-
-        # Create KDTree for the points
-        kdtree_after = cKDTree(points_after)
-        distances, indices = kdtree_after.query(points_before)
-
-        # Filter points in mesh_before that are not within the self.distance_filter_threshold distance in mesh_after
-        missing_indices = np.where(distances >= self.distance_filter_threshold)[0]
-        missing_vertices = points_before[missing_indices]
-
-        # Create a new point cloud with points that are missing in mesh_after
-        mesh_missing = o3d.geometry.PointCloud()
-        mesh_missing.points = o3d.utility.Vector3dVector(missing_vertices)
-
-        # Now, filter out points in mesh_missing that have fewer than 20 neighbors within the self.distance_filter_threshold distance
-        missing_vertices_np = np.asarray(mesh_missing.points)
-
-        # Create KDTree for the points in mesh_missing
-        kdtree_missing = cKDTree(missing_vertices_np)
-
-        # Query neighbors within the self.distance_filter_threshold distance for each point in mesh_missing
-        neighbor_counts = kdtree_missing.query_ball_point(missing_vertices_np, r=self.distance_filter_threshold)
-
-        # Only keep points that have at least 20 neighbors in their vicinity
-        valid_indices = [i for i, neighbors in enumerate(neighbor_counts) if len(neighbors) >= self.neighbor_threshold]
-        valid_vertices = missing_vertices_np[valid_indices]
-
-        # Create a new point cloud with the filtered points
-        filtered_mesh_missing = o3d.geometry.PointCloud()
-        filtered_mesh_missing.points = o3d.utility.Vector3dVector(valid_vertices)
-
-        return filtered_mesh_missing
 
     def fit_plane_to_pcd_pca(self, pcd):
         """Fit a plane to a cluster of points using PCA."""
@@ -181,13 +179,6 @@ class PCLprocessor(Node):
         projected_points = points - np.outer(distances, plane_normal)  # Subtract projection along the normal
         return projected_points
 
-
-    def calculate_lost_volume_from_changedpcl(self, mesh_missing):
-        reference_area = mesh_missing.get_surface_area()
-        volume_lost = self.plate_thickness * reference_area
-
-        return volume_lost
-
     def create_mesh_from_point_cloud(self, pcd):
         points = np.asarray(pcd.points)
         jitter = np.random.normal(scale=1e-8, size=points.shape)
@@ -204,41 +195,8 @@ class PCLprocessor(Node):
         alpha = 0.001  # Adjust this parameter for alpha shape detail
         direction = "multiply"  # Start by multiplying alpha
         previous_surface_area = 0
-
-        while iteration < max_iterations:
-            try:
-                # Try Alpha Shape for mesh creation with the current alpha value
-                #print(f'Attempting mesh creation with alpha: {alpha:.2g}')
-                mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha)
-
-                # Compute the surface area of the mesh
-                current_surface_area = mesh.get_surface_area()
-                #print(f"Current surface area: {current_surface_area}")
-
-                # Check if the surface area is below the threshold or has decreased
-                if current_surface_area > previous_surface_area:
-                    # Surface area has increased, update previous_surface_area
-                    previous_surface_area = current_surface_area
-                else:
-                    # If surface area decreased or did not improve, switch the direction
-                    previous_surface_area = current_surface_area
-                    if direction == "multiply":
-                        direction = "divide"
-                    else:
-                        direction = "multiply"
-
-                # Update alpha based on the current direction
-                if direction == "multiply":
-                    alpha *= step
-                else:
-                    alpha /= step
-
-
-            except Exception as e:
-                print(f"Alpha shape failed on iteration {iteration} with error: {e}")
-
-            # Increment iteration counter
-            iteration += 1
+        mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha)
+        current_surface_area = mesh.get_surface_area()
 
         print(f"Mesh created successfully with surface area {current_surface_area} and alpha {alpha:.2g}")
         '''

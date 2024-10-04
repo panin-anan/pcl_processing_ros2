@@ -84,13 +84,11 @@ class PCLprocessor(Node):
             self.start_visualization_thread(self.combined_pcl_initial[0])
 
         elif len(self.combined_pcl_initial) > 0 and len(self.combined_pcl_postgrind) < 1:
-            self.get_logger().info('Processing postgrind')
 
             self.combined_pcl_postgrind.append(o3d_pcl)
-
             self.get_logger().info('PCL saved to postgrind')
+
             #Write PCL Pair to folder
-            '''
             pcl_path = os.path.join(self.mesh_folder_path, f'pcl_{self.mesh_filename}_initial_{str(datetime.now()).split(".")[0]}.ply')
             self.get_logger().info(f"Saving initial pointcloud to: {pcl_path}")
             o3d.io.write_point_cloud(pcl_path, self.combined_pcl_initial)
@@ -99,7 +97,7 @@ class PCLprocessor(Node):
             self.get_logger().info(f"Saving postgrind pointcloud to: {pcl_path}")
             o3d.io.write_point_cloud(pcl_path, self.combined_pcl_postgrind)
             self.get_logger().info("Saved pointcloud pair")
-            '''
+            
 
             #filter point by plane and project onto it
             self.combined_pcl_initial[0], mesh1_plane_normal, mesh1_plane_centroid = filter_project_points_by_plane(self.combined_pcl_initial[0], distance_threshold=0.0006)
@@ -154,61 +152,6 @@ class PCLprocessor(Node):
         # Start the visualization thread
         self.visualization_thread = threading.Thread(target=self.visualize_mesh, args=(pcl,))
         self.visualization_thread.start()
-
-
-    def fit_plane_to_pcd_pca(self, pcd):
-        """Fit a plane to a cluster of points using PCA."""
-        points = np.asarray(pcd.points)
-
-        # Perform PCA
-        pca = PCA(n_components=3)
-        pca.fit(points)
-
-        # Get the normal to the plane (third principal component)
-        plane_normal = pca.components_[2]  # The normal to the plane (least variance direction)
-
-        # The centroid is the mean of the points
-        centroid = np.mean(points, axis=0)
-
-        return plane_normal, centroid
-
-    def project_points_onto_plane(self, points, plane_normal, plane_centroid):
-        """Project points onto the plane defined by the normal and a point."""
-        vectors = points - plane_centroid  # Vector from point to plane_centroid
-        distances = np.dot(vectors, plane_normal)  # Project onto the normal
-        projected_points = points - np.outer(distances, plane_normal)  # Subtract projection along the normal
-        return projected_points
-
-    def create_mesh_from_point_cloud(self, pcd):
-        points = np.asarray(pcd.points)
-        jitter = np.random.normal(scale=1e-8, size=points.shape)
-        pcd.points = o3d.utility.Vector3dVector(points + jitter)
-        pcd.estimate_normals()
-        pcd.orient_normals_consistent_tangent_plane(30)
-
-
-        # Alpha shape
-        # Iteratively adjust radii until a suitable mesh is created
-        iteration = 0
-        max_iterations = 10
-        step = 1.2
-        alpha = 0.001  # Adjust this parameter for alpha shape detail
-        direction = "multiply"  # Start by multiplying alpha
-        previous_surface_area = 0
-        mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha)
-        current_surface_area = mesh.get_surface_area()
-
-        print(f"Mesh created successfully with surface area {current_surface_area} and alpha {alpha:.2g}")
-        '''
-        #ball pivoting
-        distances = pcd.compute_nearest_neighbor_distance()
-        avg_dist = np.mean(distances)
-        radii = [0.05 * avg_dist, 0.1 * avg_dist, 0.25 * avg_dist, 0.4 * avg_dist, 0.7 * avg_dist, 1 * avg_dist, 1.5 * avg_dist, 2 * avg_dist, 3 * avg_dist] #can reduce to reduce computation
-        r = o3d.utility.DoubleVector(radii)
-        mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pcd, r)
-        '''
-        
-        return mesh
 
 
     def visualize_mesh(self, mesh):

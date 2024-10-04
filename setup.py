@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'pcl_processor = pcl_processing_ros2.pcl_processor:main'
+            'pcl_publish_manual = pcl_processing_ros2.pcl_publish_manual:main'
         ],
     },
 )

@@ -11,15 +11,10 @@ from sensor_msgs_py import point_cloud2
 import open3d as o3d
 import numpy as np
 import threading
-import copy
-from scipy.spatial import cKDTree
 import os
-from scipy.spatial import cKDTree, Delaunay
-import signal
-import sys
-import time
-from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
+import copy
+from datetime import datetime
+
 
 from pcl_processing_ros2.mesh_calculations import (
     filter_project_points_by_plane,
@@ -48,12 +43,10 @@ class PCLprocessor(Node):
         self.lost_volume = None
 
         #PCL Collector
-        self.alpha = 0.005
-        self.meshes: list[o3d.geometry.TriangleMesh] = []
-        self.mesh_folder_path = os.path.join(os.getcwd(), 'meshes')
+        self.mesh_folder_path = os.path.join(os.getcwd(), 'meshes_pair')
         if not os.path.exists(self.mesh_folder_path):
             os.mkdir(self.mesh_folder_path)
-        self.mesh_filename = 'turbine_blade'
+        self.mesh_filename = 'sample_plate'
 
         # Visualization threading
         self.lock = threading.Lock()
@@ -61,13 +54,21 @@ class PCLprocessor(Node):
 
 
     def init_parameters(self) -> None:
-        self.declare_parameter('distance_filter_threshold',     '0.0005')    # filter for segmenting grinded area
-        self.declare_parameter('neighbor_threshold',            '5'     )    # number of required neighbour points to remove outliers
-        self.declare_parameter('plate_thickness',               '0.002'     )    # in m
+        self.declare_parameter('dist_threshold',                '0.0006')    # filter for plane projection
+        self.declare_parameter('plane_error_allowance',         '10'    )    # in degree
+        self.declare_parameter('clusterscan_eps',               '0.0005')    # size for cluster grouping in DBScan
+        self.declare_parameter('cluster_neighbor',              '30'    )    # number of required neighbour points to remove outliers
+        self.declare_parameter('laserline_threshold',           '0.0001')    # scan resolution line axis in m
+        self.declare_parameter('feedaxis_threshold',            '0.0002')    # scan resolution feed axis in m
+        self.declare_parameter('plate_thickness',               '0.002' )    # in m
 
-        self.distance_filter_threshold = float(self.get_parameter('distance_filter_threshold').get_parameter_value().string_value)
-        self.neighbor_threshold = float(self.get_parameter('neighbor_threshold').get_parameter_value().string_value) 
+        self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
+        self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
         self.plate_thickness = float(self.get_parameter('plate_thickness').get_parameter_value().string_value) 
+        self.plane_error_allowance = float(self.get_parameter('plane_error_allowance').get_parameter_value().string_value)
+        self.clusterscan_eps = float(self.get_parameter('clusterscan_eps').get_parameter_value().string_value)
+        self.laserline_threshold = float(self.get_parameter('laserline_threshold').get_parameter_value().string_value)
+        self.feedaxis_threshold = float(self.get_parameter('feedaxis_threshold').get_parameter_value().string_value)
 
     def combined_cloud_callback(self, msg):
         self.get_logger().info('Received combined point cloud message')
@@ -88,27 +89,20 @@ class PCLprocessor(Node):
             self.combined_pcl_postgrind.append(o3d_pcl)
             self.get_logger().info('PCL saved to postgrind')
 
+            # TODO move this to data_gathering
             #Write PCL Pair to folder
-            pcl_path = os.path.join(self.mesh_folder_path, f'pcl_{self.mesh_filename}_initial_{str(datetime.now()).split(".")[0]}.ply')
-            self.get_logger().info(f"Saving initial pointcloud to: {pcl_path}")
-            o3d.io.write_point_cloud(pcl_path, self.combined_pcl_initial)
-
-            pcl_path = os.path.join(self.mesh_folder_path, f'pcl_{self.mesh_filename}_postgrind_{str(datetime.now()).split(".")[0]}.ply')
-            self.get_logger().info(f"Saving postgrind pointcloud to: {pcl_path}")
-            o3d.io.write_point_cloud(pcl_path, self.combined_pcl_postgrind)
-            self.get_logger().info("Saved pointcloud pair")
-            
+            self.write_PCL_pair_to_folder()
 
             #filter point by plane and project onto it
-            self.combined_pcl_initial[0], mesh1_plane_normal, mesh1_plane_centroid = filter_project_points_by_plane(self.combined_pcl_initial[0], distance_threshold=0.0006)
-            self.combined_pcl_postgrind[0], mesh2_plane_normal, mesh2_plane_centroid = filter_project_points_by_plane(self.combined_pcl_postgrind[0], distance_threshold=0.0006)
+            self.combined_pcl_initial[0], mesh1_plane_normal, mesh1_plane_centroid = filter_project_points_by_plane(self.combined_pcl_initial[0], distance_threshold=self.dist_threshold)
+            self.combined_pcl_postgrind[0], mesh2_plane_normal, mesh2_plane_centroid = filter_project_points_by_plane(self.combined_pcl_postgrind[0], distance_threshold=self.dist_threshold)
 
             self.get_logger().info('PCL Projected on plane')
 
             # Check alignment
             cos_angle = np.dot(mesh1_plane_normal, mesh2_plane_normal) / (np.linalg.norm(mesh1_plane_normal) * np.linalg.norm(mesh2_plane_normal))
             angle = np.arccos(np.clip(cos_angle, -1.0, 1.0)) * 180 / np.pi
-            if abs(angle) > 10:     #10 degree misalignment throw error
+            if abs(angle) > self.plane_error_allowance:     #10 degree misalignment throw error
                 raise ValueError(f"Plane normals differ too much: {angle} degrees")
 
             projected_points_mesh2 = project_points_onto_plane(np.asarray(self.combined_pcl_postgrind[0].points), mesh1_plane_normal, mesh1_plane_centroid)
@@ -119,30 +113,48 @@ class PCLprocessor(Node):
             mesh2_colored = self.combined_pcl_postgrind[0].paint_uniform_color([0, 1, 0])  # Green color
 
             self.get_logger().info('Filtering for changes in pcl')
-            self.changed_pcl = filter_missing_points_by_yz(self.combined_pcl_initial[0], self.combined_pcl_postgrind[0], y_threshold=0.0002, z_threshold=0.0001)
+            self.changed_pcl = filter_missing_points_by_yz(self.combined_pcl_initial[0], self.combined_pcl_postgrind[0], y_threshold=self.feedaxis_threshold, z_threshold=self.laserline_threshold)
             # after filter difference
             self.changed_pcl.paint_uniform_color([0, 0, 1])  # Blue color for changed surface mesh
             # after sorting
-            self.changed_pcl = sort_largest_cluster(self.changed_pcl, eps=0.0005, min_points=30, remove_outliers=True)
+            self.changed_pcl = sort_largest_cluster(self.changed_pcl, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)
 
             self.start_visualization_thread(self.changed_pcl)
             #area from bounding box
             width, height, area = create_bbox_from_pcl(self.changed_pcl)
 
-
+            self.get_logger().info(f"bbox width: {width} m, height: {height} m")
             self.lost_volume = area * self.plate_thickness
             self.get_logger().info(f"Lost Volume: {self.lost_volume} m^3")
 
             # Prepare and publish volume message
             msg_stamped = Float32Stamped()
             msg_stamped.data = float(self.lost_volume)
-            msg_stamped.header = Header()
             self.publisher_volume.publish(msg_stamped)
 
             #After publish/save, set postgrind as initial and empty postgrind
             self.combined_pcl_initial = copy.deepcopy(self.combined_pcl_postgrind)
             self.combined_pcl_postgrind = []
 
+
+    def write_PCL_pair_to_folder(self):
+
+        rpm = 9000
+        force = 5
+
+        self.pair_folder_path = os.path.join(self.mesh_folder_path, f'rpm{rpm}_force{force}')
+        if not os.path.exists(self.pair_folder_path):
+            os.mkdir(self.pair_folder_path)
+
+        # Write initial point cloud
+        pcl_initial_path = os.path.join(self.pair_folder_path, f'pcl_{self.mesh_filename}_initial_{str(datetime.now()).split(".")[0]}.ply')
+        self.get_logger().info(f"Saving initial pointcloud to: {pcl_initial_path}")
+        o3d.io.write_point_cloud(pcl_initial_path, self.combined_pcl_initial[0])
+
+        # Write postgrind point cloud
+        pcl_postgrind_path = os.path.join(self.pair_folder_path, f'pcl_{self.mesh_filename}_postgrind_{str(datetime.now()).split(".")[0]}.ply')
+        self.get_logger().info(f"Saving postgrind pointcloud to: {pcl_postgrind_path}")
+        o3d.io.write_point_cloud(pcl_postgrind_path, self.combined_pcl_postgrind[0])
 
     def start_visualization_thread(self, pcl):
         # Avoid multiple visualization threads

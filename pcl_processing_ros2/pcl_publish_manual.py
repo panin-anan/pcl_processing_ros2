@@ -5,7 +5,6 @@ from rclpy.executors import MultiThreadedExecutor
 
 from keyboard_msgs.msg import Key
 from sensor_msgs.msg import PointCloud2, PointField
-from sensor_msgs_py import point_cloud2
 
 import open3d as o3d
 import numpy as np
@@ -14,7 +13,7 @@ from tkinter import filedialog, messagebox
 
 
 
-class PCLpublish(Node):
+class PCLpublisher(Node):
     def __init__(self):
         super().__init__('pcl_publish_manual')
         
@@ -24,12 +23,15 @@ class PCLpublish(Node):
         self.create_subscription(Key, 'keydown', self.key_callback, 1)
 
         self.cloud_publish_trigger = Key.KEY_P
+        self.global_frame_id = 'base_link'
 
 
     def key_callback(self, msg):
         if msg.code == self.cloud_publish_trigger:
             comb_cloud_pcl = self.load_mesh()
+            self.get_logger().info('Loading PCL')
             self.combine_pcl_publisher.publish(self.create_pcl_msg(comb_cloud_pcl))
+            self.get_logger().info('PCL Published')
 
     def create_pcl_msg(self, o3d_pcl):
         datapoints = np.asarray(o3d_pcl.points, dtype=np.float32)
@@ -78,7 +80,7 @@ class PCLpublish(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    pcl_processor = PCLprocessor()
+    pcl_processor = PCLpublisher()
     executor = MultiThreadedExecutor()
 
     try:

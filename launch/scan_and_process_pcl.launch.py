@@ -19,9 +19,13 @@ def generate_launch_description():
         executable="pcl_processor",
         name='pcl_process',    # This is the first line in the config file 
         parameters=[
-            {'distance_filter_threshold':       '0.0003',            # Distance to filter grinded area. do not go near #50-80 micron on line axis, 200 micron on feed axis of rate 30 second
-            'neighbor_threshold':               '10',                # filter outlier with #of neighbour point threshold
+            {'dist_threshold':       '0.0006',            # Distance to filter grinded area. do not go near #50-80 micron on line axis, 200 micron on feed axis of rate 30 second
+            'cluster_neighbor':               '30',                # filter outlier with #of neighbour point threshold
             'plate_thickness':                  '2',                # in mm
+            'plane_error_allowance':            '10',               #in degree
+            'clusterscan_eps':               '0.0005',              # cluster minimum dist grouping in m
+            'laserline_threshold':                   '0.0001',      # scan resolution line axis in m
+            'feedaxis_threshold':                     '0.0002',     # scan resolution robot feed axis in m
             }
         ]
     )

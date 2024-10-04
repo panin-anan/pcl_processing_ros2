@@ -1,0 +1,42 @@
+publisher_scaled_joint_trajectory_controller:
+  ros__parameters:
+
+    controller_name: "scaled_joint_trajectory_controller"
+
+    goal_names: ["idle_pose", "measurement_pose1", "measurement_pose2", "measurement_pose3", "measurement_pose4"]
+    idle_pose:
+      positions: [0.0, -1.57, -1.57, -1.57, 1.57, 0.0]
+      accelerations: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    measurement_pose1:
+      positions: [0.09487180411815643, -3.0071751079955042, -1.4036939144134521, -0.3062313360026856, 1.6941055059432983, 0.11912013590335846]
+      accelerations: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    measurement_pose2:
+      positions: [0.09248733520507812, -3.230943342248434, -0.6163634061813354, -0.8856495183757325, 1.5505017042160034, 0.11895493417978287]
+      accelerations: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    measurement_pose3:
+      positions: [0.09259185940027237, -3.0926133594908656, -0.7242085933685303, -0.9552685779384156, 1.5504939556121826, 0.11901327967643738]
+      accelerations: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    measurement_pose4:
+      positions: [0.09610740840435028, -2.8905369244017542, -1.4331289529800415, -0.37187059343371587, 1.5504940748214722, 0.11885890364646912]
+      accelerations: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    
+    # This sets the time in which a move should be executed if only position is specified
+    # Format: [seconds, nanoseconds]
+    movement_duration: [7, 0]
+    
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
+
+    check_starting_point: true
+    starting_point_limits:
+      shoulder_pan_joint: [-0.2,0.2]
+      shoulder_lift_joint: [-1.7,-1.4]
+      elbow_joint: [-1.7,-1.4]
+      wrist_1_joint: [-1.7,-1.4]
+      wrist_2_joint: [1.4,1.7]
+      wrist_3_joint: [-0.2,0.2]

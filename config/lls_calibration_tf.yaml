@@ -1,0 +1,10 @@
+static_transform:
+  x: 0.02891082
+  y: 0.03977792
+  z: 0.03213411
+  qx: 0.00376791
+  qy: -0.71073923
+  qz: -0.70344394
+  qw: 0.00147206
+  frame-id: "flange"
+  child-frame-id: "scancontrol"

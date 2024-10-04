@@ -37,6 +37,7 @@ class PCLpublisher(Node):
         datapoints = np.asarray(o3d_pcl.points, dtype=np.float32)
 
         pointcloud = PointCloud2()
+        pointcloud.header.stamp = self.get_clock().now().to_msg()
         pointcloud.header.frame_id = self.global_frame_id
 
         dims = ['x', 'y', 'z']

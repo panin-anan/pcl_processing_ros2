@@ -44,9 +44,23 @@ def generate_launch_description():
         executable="keyboard"
     )
 
+    #start rviz for testing
+    rviz_config_path = os.path.join(get_package_share_directory(pkg),
+        'config',
+        'rviz_config.rviz'
+    )
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output={'both': 'log'},
+        arguments=['-d', rviz_config_path,],
+    )
+
     ld = LaunchDescription()
     ld.add_action(manual_cloud_publish)
     ld.add_action(combine_cloud_listener)
     ld.add_action(key_logger)
+    ld.add_action(rviz)
 
     return ld

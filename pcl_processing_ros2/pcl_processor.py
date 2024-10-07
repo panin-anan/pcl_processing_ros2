@@ -14,10 +14,12 @@ import os
 
 from pcl_processing_ros2.mesh_calculations import (
     filter_project_points_by_plane,
-    filter_missing_points_by_yz,
+    filter_missing_points_by_xy,
     create_bbox_from_pcl,
     project_points_onto_plane,
-    sort_largest_cluster
+    sort_largest_cluster,
+    transform_to_local_pca_coordinates,
+    transform_to_global_coordinates
 )
 
 
@@ -71,42 +73,53 @@ class PCLprocessor(Node):
         # self.write_PCL_pair_to_folder()
 
         #filter point by plane and project onto it
-        pcl1, mesh1_plane_normal, mesh1_plane_centroid = filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
-        pcl2, mesh2_plane_normal, mesh2_plane_centroid = filter_project_points_by_plane(pcl2, distance_threshold=self.dist_threshold)
+        pcl1, mesh1_pca_basis, mesh1_plane_centroid = filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
+        pcl2, mesh2_pca_basis, mesh2_plane_centroid = filter_project_points_by_plane(pcl2, distance_threshold=self.dist_threshold)
 
         self.get_logger().info('PCL Projected on plane')
 
         # Check alignment
-        cos_angle = np.dot(mesh1_plane_normal, mesh2_plane_normal) / (np.linalg.norm(mesh1_plane_normal) * np.linalg.norm(mesh2_plane_normal))
+        cos_angle = np.dot(mesh1_pca_basis[2], mesh2_pca_basis[2]) / (np.linalg.norm(mesh1_pca_basis[2]) * np.linalg.norm(mesh2_pca_basis[2]))
         angle = np.arccos(np.clip(cos_angle, -1.0, 1.0)) * 180 / np.pi
         if abs(angle) > self.plane_error_allowance:     #10 degree misalignment throw error
             raise ValueError(f"Plane normals differ too much: {angle} degrees")
 
-        projected_points_mesh2 = project_points_onto_plane(np.asarray(pcl2.points), mesh1_plane_normal, mesh1_plane_centroid)
+        projected_points_mesh2 = project_points_onto_plane(np.asarray(pcl2.points), mesh1_pca_basis[2], mesh1_plane_centroid)
         pcl2.points = o3d.utility.Vector3dVector(projected_points_mesh2)
 
+        #transform points to local xy plane
+        pcl1_local = transform_to_local_pca_coordinates(pcl1, mesh1_pca_basis, mesh1_plane_centroid )
+        pcl2_local = transform_to_local_pca_coordinates(pcl2, mesh1_pca_basis, mesh1_plane_centroid )
+
         self.get_logger().info('Filtering for changes in pcl')
-        changed_pcl = filter_missing_points_by_yz(pcl1, pcl2, y_threshold=self.feedaxis_threshold, z_threshold=self.laserline_threshold)
+        changed_pcl_local = filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.feedaxis_threshold, y_threshold=self.laserline_threshold)
         
         # after sorting
-        changed_pcl = sort_largest_cluster(changed_pcl, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)
+        changed_pcl_local = sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)
 
-        #area from bounding box
-        width, height, area = create_bbox_from_pcl(changed_pcl)
+        # Check if there are any missing points detected
+        if changed_pcl_local is None or len(np.asarray(changed_pcl_local.points)) == 0:
+            self.get_logger().info("No detectable difference between point clouds. Lost volume is 0.")
+            lost_volume = 0.0
+        else 
+            #area from bounding box
+            width, height, area = create_bbox_from_pcl(changed_pcl_local)
+            self.get_logger().info(f"bbox width: {width} m, height: {height} m")
+            lost_volume = area * self.plate_thickness
+            self.get_logger().info(f"Lost Volume: {lost_volume} m^3")
 
-        self.get_logger().info(f"bbox width: {width} m, height: {height} m")
-        lost_volume = area * self.plate_thickness
-        self.get_logger().info(f"Lost Volume: {lost_volume} m^3")
+        #transform back to global for visualization
+        changed_pcl_global = transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
 
         # Prepare and publish grinded cloud and volume message
         msg_stamped = Float32Stamped()
         msg_stamped.data = float(lost_volume)
         self.publisher_volume.publish(msg_stamped)
-        diff_pcl = self.create_pcl_msg(changed_pcl)
-        self.publisher_grinded_cloud.publish(diff_pcl) 
+        diff_pcl_global = self.create_pcl_msg(changed_pcl_global)
+        self.publisher_grinded_cloud.publish(diff_pcl_global) 
 
         response.volume_difference = lost_volume
-        response.difference_pointcloud = diff_pcl
+        response.difference_pointcloud = diff_pcl_global
         return response 
 
     # def write_PCL_pair_to_folder(self):

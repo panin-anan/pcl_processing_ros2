@@ -43,9 +43,9 @@ def filter_project_points_by_plane(point_cloud, distance_threshold=0.001):
     # Select points that are close to the plane (within the threshold)
     inlier_cloud = point_cloud.select_by_index(inliers)
     
-    plane_normal, plane_centroid = fit_plane_to_pcd_pca(inlier_cloud)
+    pca_basis, plane_centroid = fit_plane_to_pcd_pca(inlier_cloud)
     points = np.asarray(inlier_cloud.points)
-    projected_points = project_points_onto_plane(points, plane_normal, plane_centroid)
+    projected_points = project_points_onto_plane(points, pca_basis[2], plane_centroid)
 
     # Create a new point cloud with the projected points
     projected_pcd = o3d.geometry.PointCloud()
@@ -58,11 +58,11 @@ def filter_project_points_by_plane(point_cloud, distance_threshold=0.001):
     # Visualize both the original point cloud, inliers, and projected points
     #o3d.visualization.draw_geometries([projected_pcd])
 
-    return projected_pcd, plane_normal, plane_centroid
+    return projected_pcd, pca_basis, plane_centroid
 
 
 
-def filter_missing_points_by_yz(mesh_before, mesh_after, y_threshold=0.0003, z_threshold=0.0001):
+def filter_missing_points_by_xy(mesh_before, mesh_after, x_threshold=0.0003, y_threshold=0.0001):
     # Convert points from Open3D mesh to numpy arrays
     points_before = np.asarray(mesh_before.points)
     points_after = np.asarray(mesh_after.points)
@@ -74,21 +74,21 @@ def filter_missing_points_by_yz(mesh_before, mesh_after, y_threshold=0.0003, z_t
     _, indices = kdtree_after.query(points_before)
     
     # Get the y and z coordinates from both meshes
+    x_before = points_before[:, 0]
     y_before = points_before[:, 1]
-    z_before = points_before[:, 2]
-    y_after = points_after[indices, 1]  # Nearest neighbors' y-coordinates
-    z_after = points_after[indices, 2]  # Nearest neighbors' z-coordinates
+    x_after = points_after[indices, 0]  # Nearest neighbors' y-coordinates
+    y_after = points_after[indices, 1]  # Nearest neighbors' z-coordinates
     
     # Calculate the absolute differences in the y and z coordinates
+    x_diff = np.abs(x_before - x_after)
     y_diff = np.abs(y_before - y_after)
-    z_diff = np.abs(z_before - z_after)
     
     # Create a mask to find points in mesh_before where either the y or z axis difference
     # with the corresponding point in mesh_after exceeds the respective thresholds
-    yz_diff_mask = (y_diff >= y_threshold) | (z_diff >= z_threshold)
+    xy_diff_mask = (x_diff >= x_threshold) | (y_diff >= y_threshold)
     
     # Select the points from mesh_before where the y or z axis difference is larger than the threshold
-    missing_points = points_before[yz_diff_mask]
+    missing_points = points_before[xy_diff_mask]
     
     # Create a new point cloud with the points that have significant y or z axis differences
     mesh_missing = o3d.geometry.PointCloud()
@@ -101,21 +101,22 @@ def create_bbox_from_pcl(pcl):
     # Step 1: Convert point cloud to numpy array
     points = np.asarray(pcl.points)
 
-    # Step 2: Since data is planar, project points to a 2D plane (ignore one axis, e.g., X-axis)
-    yz_points = points[:, 1:3]  # Take Y and Z coordinates (planar in YZ plane)
+    # Step 2: Since data is planar, project points to a 2D plane (ignore one axis, e.g., Z-axis)
+    xy_points = points[:, 0:2]  # Take X and Y coordinates (planar in XY plane)
 
-    # Step 3: Get the 2D Axis-Aligned Bounding Box (AABB) for the planar points (YZ plane)
-    min_bound = np.min(yz_points, axis=0)
-    max_bound = np.max(yz_points, axis=0)
+    # Step 3: Get the 2D Axis-Aligned Bounding Box (AABB) for the planar points (XY plane)
+    min_bound = np.min(xy_points, axis=0)
+    max_bound = np.max(xy_points, axis=0)
 
-    # Step 4: Calculate width and height of the 2D bounding box (in YZ plane)
-    width = max_bound[0] - min_bound[0]  # Y-axis difference
-    height = max_bound[1] - min_bound[1]  # Z-axis difference
+    # Step 4: Calculate width and height of the 2D bounding box (in XY plane)
+    width = max_bound[0] - min_bound[0]  # X-axis difference
+    height = max_bound[1] - min_bound[1]  # Y-axis difference
 
-    # Step 5: Calculate the 2D area (in YZ plane)
+    # Step 5: Calculate the 2D area (in XY plane)
     area = width * height
 
     return width, height, area
+
 
 
 def sort_largest_cluster(pcd, eps=0.005, min_points=30, remove_outliers=True):
@@ -147,4 +148,30 @@ def sort_largest_cluster(pcd, eps=0.005, min_points=30, remove_outliers=True):
     #if remove_outliers and largest_cluster_pcd is not None:
     #    largest_cluster_pcd, _ = largest_cluster_pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
 
+    if largest_cluster_pcd is None:
+        largest_cluster_pcd = o3d.geometry.PointCloud()
+
     return largest_cluster_pcd
+
+def transform_to_local_pca_coordinates(pcd, pca_basis, centroid):
+    points = np.asarray(pcd.points)
+    centered_points = points - centroid
+    local_points = centered_points @ pca_basis.T
+    local_pcl = o3d.geometry.PointCloud()
+    local_pcl.points = o3d.utility.Vector3dVector(local_points)
+    return local_pcl
+
+def transform_to_global_coordinates(local_pcl, pca_basis, centroid):
+    local_points = np.asarray(local_pcl.points)
+    
+    # Step 1: Apply the inverse PCA transformation (PCA basis transpose, since it's orthonormal)
+    global_points = local_points @ pca_basis
+    
+    # Step 2: Add the centroid back to translate the points back to the original coordinate system
+    global_points += centroid
+    
+    # Step 3: Create a new PointCloud with global coordinates
+    global_pcl = o3d.geometry.PointCloud()
+    global_pcl.points = o3d.utility.Vector3dVector(global_points)
+    
+    return global_pcl

@@ -21,10 +21,12 @@ def fit_plane_to_pcd_pca(pcd):
         # Get the normal to the plane (third principal component)
         plane_normal = pca.components_[2]  # The normal to the plane (least variance direction)
 
-        # The centroid is the mean of the points
-        centroid = np.mean(points, axis=0)
+        pca_basis = pca.components_  # Shape (3, 3)
 
-        return plane_normal, centroid
+        # The mean of the data gives the centroid
+        centroid = pca.mean_  # Shape (3,)
+
+        return pca_basis, centroid
 
 def project_points_onto_plane(points, plane_normal, plane_point):
     """Project points onto the plane defined by the normal and a point."""
@@ -42,7 +44,6 @@ def filter_project_points_by_plane(point_cloud, distance_threshold=0.001):
     
     # Select points that are close to the plane (within the threshold)
     inlier_cloud = point_cloud.select_by_index(inliers)
-    
     pca_basis, plane_centroid = fit_plane_to_pcd_pca(inlier_cloud)
     points = np.asarray(inlier_cloud.points)
     projected_points = project_points_onto_plane(points, pca_basis[2], plane_centroid)

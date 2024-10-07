@@ -101,7 +101,7 @@ class PCLprocessor(Node):
         if changed_pcl_local is None or len(np.asarray(changed_pcl_local.points)) == 0:
             self.get_logger().info("No detectable difference between point clouds. Lost volume is 0.")
             lost_volume = 0.0
-        else 
+        else: 
             #area from bounding box
             width, height, area = create_bbox_from_pcl(changed_pcl_local)
             self.get_logger().info(f"bbox width: {width} m, height: {height} m")

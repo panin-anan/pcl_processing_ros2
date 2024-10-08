@@ -29,9 +29,6 @@ class PCLprocessor(Node):
         self.volume_calculation_server = self.create_service(RequestPCLVolumeDiff, 'calculate_volume_lost', self.calculate_volume_difference, callback_group=MutuallyExclusiveCallbackGroup())
 
         #PCL Collector
-        self.mesh_folder_path = os.path.join(os.getcwd(), 'meshes_pair')
-        if not os.path.exists(self.mesh_folder_path):
-            os.mkdir(self.mesh_folder_path)
         self.mesh_filename = 'sample_plate'
         self.global_frame_id = 'base_link'
 
@@ -92,9 +89,9 @@ class PCLprocessor(Node):
         else: 
             #area from bounding box
             width, height, area = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
-            self.get_logger().info(f"bbox width: {width} m, height: {height} m")
+            self.get_logger().info(f"bbox width: {width * 1000} mm, height: {height * 1000} mm")
             lost_volume = area * self.plate_thickness
-            self.get_logger().info(f"Lost Volume: {lost_volume} m^3")
+            self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
 
         #transform back to global for visualization
         changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 

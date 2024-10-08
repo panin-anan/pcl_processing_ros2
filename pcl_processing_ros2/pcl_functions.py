@@ -48,10 +48,10 @@ class PCLfunctions:
         # Create a new point cloud with the projected points
         projected_pcd = o3d.geometry.PointCloud()
         projected_pcd.points = o3d.utility.Vector3dVector(projected_points)
-        projected_pcd.paint_uniform_color([1, 0, 0])  # Color projected points in red
+        # projected_pcd.paint_uniform_color([1, 0, 0])  # Color projected points in red
 
         # Color the inlier points (on the original RANSAC plane) in green
-        inlier_cloud.paint_uniform_color([0, 1, 0])  # Color inlier points in green
+        # inlier_cloud.paint_uniform_color([0, 1, 0])  # Color inlier points in green
 
         # Visualize both the original point cloud, inliers, and projected points
         #o3d.visualization.draw_geometries([projected_pcd])
@@ -124,9 +124,9 @@ class PCLfunctions:
         # Number of clusters (label -1 indicates noise)
         num_clusters = labels.max() + 1
 
-        colors = plt.get_cmap("tab20")(labels / (num_clusters if num_clusters > 0 else 1))
-        colors[labels == -1] = [0, 0, 0, 1]  # Color noise points black
-        pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
+        # colors = plt.get_cmap("tab20")(labels / (num_clusters if num_clusters > 0 else 1))
+        # colors[labels == -1] = [0, 0, 0, 1]  # Color noise points black
+        # pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
         #o3d.visualization.draw_geometries([pcd])
 
         # Step 2: Find the largest cluster

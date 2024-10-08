@@ -60,6 +60,8 @@ class PCLprocessor(Node):
         #filter point by plane and project onto it
         pcl1, mesh1_pca_basis, mesh1_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
         pcl2, mesh2_pca_basis, mesh2_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl2, distance_threshold=self.dist_threshold)
+        pcl1 = self.pcl_functions.sort_plate_cluster(pcl1, eps=0.0005, min_points=100)
+        pcl2 = self.pcl_functions.sort_plate_cluster(pcl2, eps=0.0005, min_points=100)
 
         self.get_logger().info('PCL Projected on plane')
 
@@ -75,6 +77,7 @@ class PCLprocessor(Node):
         #transform points to local xy plane
         pcl1_local = self.pcl_functions.transform_to_local_pca_coordinates(pcl1, mesh1_pca_basis, mesh1_plane_centroid )
         pcl2_local = self.pcl_functions.transform_to_local_pca_coordinates(pcl2, mesh1_pca_basis, mesh1_plane_centroid )
+
 
         self.get_logger().info('Filtering for changes in pcl')
         changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.feedaxis_threshold, y_threshold=self.laserline_threshold)

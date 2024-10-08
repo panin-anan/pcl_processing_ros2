@@ -116,6 +116,36 @@ class PCLfunctions:
         return width, height, area
 
 
+    def sort_plate_cluster(self, pcd, eps=0.0005, min_points=100, remove_outliers=True):
+        # Step 1: Segment point cloud into clusters using DBSCAN
+        labels = np.array(pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True))
+    
+        # Number of clusters (label -1 indicates noise)
+        num_clusters = labels.max() + 1
+
+        # Step 2: Find the largest cluster
+        max_cluster_size = 0
+        largest_cluster_pcd = None
+
+        for cluster_idx in range(num_clusters):
+            # Get the indices of the points that belong to the current cluster
+            cluster_indices = np.where(labels == cluster_idx)[0]
+        
+            # If this cluster is the largest we've found, update the largest cluster info
+            if len(cluster_indices) > max_cluster_size:
+                max_cluster_size = len(cluster_indices)
+                largest_cluster_pcd = pcd.select_by_index(cluster_indices)
+
+        print(f"Largest cluster has {max_cluster_size} points")
+
+        # Optionally: Remove outliers (if remove_outliers is set to True)
+        #if remove_outliers and largest_cluster_pcd is not None:
+        #    largest_cluster_pcd, _ = largest_cluster_pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+
+        if largest_cluster_pcd is None:
+            largest_cluster_pcd = o3d.geometry.PointCloud()
+
+        return largest_cluster_pcd
 
     def sort_largest_cluster(self, pcd, eps=0.005, min_points=30, remove_outliers=True):
         # Step 1: Segment point cloud into clusters using DBSCAN

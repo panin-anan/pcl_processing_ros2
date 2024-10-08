@@ -11,16 +11,7 @@ import open3d as o3d
 import numpy as np
 import os
 
-
-from pcl_processing_ros2.mesh_calculations import (
-    filter_project_points_by_plane,
-    filter_missing_points_by_xy,
-    create_bbox_from_pcl,
-    project_points_onto_plane,
-    sort_largest_cluster,
-    transform_to_local_pca_coordinates,
-    transform_to_global_coordinates
-)
+from pcl_processing_ros2.pcl_functions import PCLfunctions
 
 
 class PCLprocessor(Node):
@@ -28,6 +19,9 @@ class PCLprocessor(Node):
         super().__init__('pcl_processor')
         self.init_parameters()
         
+        #initialize PCLfunctions
+        self.pcl_functions = PCLfunctions()
+
         #Publisher to publish volume lost
         self.publisher_volume = self.create_publisher(Float32Stamped, '/scanner/volume', 10)
         self.publisher_grinded_cloud = self.create_publisher(PointCloud2,'grinded_cloud', 10)
@@ -68,13 +62,14 @@ class PCLprocessor(Node):
         
         pcl1 = self.convert_ros_to_open3d(request.initial_pointcloud)
         pcl2 = self.convert_ros_to_open3d(request.final_pointcloud)
+        self.plate_thickness = request.plate_thickness
         # TODO move this to data_gathering
         #Write PCL Pair to folder
         # self.write_PCL_pair_to_folder()
 
         #filter point by plane and project onto it
-        pcl1, mesh1_pca_basis, mesh1_plane_centroid = filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
-        pcl2, mesh2_pca_basis, mesh2_plane_centroid = filter_project_points_by_plane(pcl2, distance_threshold=self.dist_threshold)
+        pcl1, mesh1_pca_basis, mesh1_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
+        pcl2, mesh2_pca_basis, mesh2_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl2, distance_threshold=self.dist_threshold)
 
         self.get_logger().info('PCL Projected on plane')
 
@@ -84,18 +79,18 @@ class PCLprocessor(Node):
         if abs(angle) > self.plane_error_allowance:     #10 degree misalignment throw error
             raise ValueError(f"Plane normals differ too much: {angle} degrees")
 
-        projected_points_mesh2 = project_points_onto_plane(np.asarray(pcl2.points), mesh1_pca_basis[2], mesh1_plane_centroid)
+        projected_points_mesh2 = self.pcl_functions.project_points_onto_plane(np.asarray(pcl2.points), mesh1_pca_basis[2], mesh1_plane_centroid)
         pcl2.points = o3d.utility.Vector3dVector(projected_points_mesh2)
 
         #transform points to local xy plane
-        pcl1_local = transform_to_local_pca_coordinates(pcl1, mesh1_pca_basis, mesh1_plane_centroid )
-        pcl2_local = transform_to_local_pca_coordinates(pcl2, mesh1_pca_basis, mesh1_plane_centroid )
+        pcl1_local = self.pcl_functions.transform_to_local_pca_coordinates(pcl1, mesh1_pca_basis, mesh1_plane_centroid )
+        pcl2_local = self.pcl_functions.transform_to_local_pca_coordinates(pcl2, mesh1_pca_basis, mesh1_plane_centroid )
 
         self.get_logger().info('Filtering for changes in pcl')
-        changed_pcl_local = filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.feedaxis_threshold, y_threshold=self.laserline_threshold)
+        changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.feedaxis_threshold, y_threshold=self.laserline_threshold)
         
         # after sorting
-        changed_pcl_local = sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)
+        changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)
 
         # Check if there are any missing points detected
         if changed_pcl_local is None or len(np.asarray(changed_pcl_local.points)) == 0:
@@ -103,13 +98,13 @@ class PCLprocessor(Node):
             lost_volume = 0.0
         else: 
             #area from bounding box
-            width, height, area = create_bbox_from_pcl(changed_pcl_local)
+            width, height, area = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
             self.get_logger().info(f"bbox width: {width} m, height: {height} m")
             lost_volume = area * self.plate_thickness
             self.get_logger().info(f"Lost Volume: {lost_volume} m^3")
 
         #transform back to global for visualization
-        changed_pcl_global = transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
+        changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
 
         # Prepare and publish grinded cloud and volume message
         msg_stamped = Float32Stamped()
@@ -174,7 +169,6 @@ class PCLprocessor(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-
     pcl_processor = PCLprocessor()
     executor = MultiThreadedExecutor()
 

@@ -21,7 +21,7 @@ def generate_launch_description():
         parameters=[
             {'dist_threshold':       '0.0006',            # Distance to filter grinded area. do not go near #50-80 micron on line axis, 200 micron on feed axis of rate 30 second
             'cluster_neighbor':               '30',                # filter outlier with #of neighbour point threshold
-            'plate_thickness':                  '2',                # in mm
+            'plate_thickness':                  '0.002',                # in m
             'plane_error_allowance':            '10',               #in degree
             'clusterscan_eps':               '0.0005',              # cluster minimum dist grouping in m
             'laserline_threshold':                   '0.0001',      # scan resolution line axis in m

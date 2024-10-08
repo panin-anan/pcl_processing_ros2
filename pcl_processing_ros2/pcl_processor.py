@@ -28,10 +28,6 @@ class PCLprocessor(Node):
         
         self.volume_calculation_server = self.create_service(RequestPCLVolumeDiff, 'calculate_volume_lost', self.calculate_volume_difference, callback_group=MutuallyExclusiveCallbackGroup())
 
-        # Pointcloud storage
-        # self.combined_pcl_initial = None 
-        # self.combined_pcl_postgrind = None 
-
         #PCL Collector
         self.mesh_folder_path = os.path.join(os.getcwd(), 'meshes_pair')
         if not os.path.exists(self.mesh_folder_path):
@@ -63,9 +59,6 @@ class PCLprocessor(Node):
         pcl1 = self.convert_ros_to_open3d(request.initial_pointcloud)
         pcl2 = self.convert_ros_to_open3d(request.final_pointcloud)
         self.plate_thickness = request.plate_thickness
-        # TODO move this to data_gathering
-        #Write PCL Pair to folder
-        # self.write_PCL_pair_to_folder()
 
         #filter point by plane and project onto it
         pcl1, mesh1_pca_basis, mesh1_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
@@ -117,25 +110,6 @@ class PCLprocessor(Node):
         response.difference_pointcloud = diff_pcl_global
         return response 
 
-    # def write_PCL_pair_to_folder(self):
-
-    #     rpm = 9000
-    #     force = 5
-
-    #     self.pair_folder_path = os.path.join(self.mesh_folder_path, f'rpm{rpm}_force{force}')
-    #     if not os.path.exists(self.pair_folder_path):
-    #         os.mkdir(self.pair_folder_path)
-
-    #     # Write initial point cloud
-    #     pcl_initial_path = os.path.join(self.pair_folder_path, f'pcl_{self.mesh_filename}_initial_{str(datetime.now()).split(".")[0]}.ply')
-    #     self.get_logger().info(f"Saving initial pointcloud to: {pcl_initial_path}")
-    #     o3d.io.write_point_cloud(pcl_initial_path, self.combined_pcl_initial)
-
-    #     # Write postgrind point cloud
-    #     pcl_postgrind_path = os.path.join(self.pair_folder_path, f'pcl_{self.mesh_filename}_postgrind_{str(datetime.now()).split(".")[0]}.ply')
-    #     self.get_logger().info(f"Saving postgrind pointcloud to: {pcl_postgrind_path}")
-    #     o3d.io.write_point_cloud(pcl_postgrind_path, self.combined_pcl_postgrind)
-
     def create_pcl_msg(self, o3d_pcl):
         datapoints = np.asarray(o3d_pcl.points, dtype=np.float32)
 
@@ -159,8 +133,7 @@ class PCLprocessor(Node):
 
     def convert_ros_to_open3d(self, pcl_msg):
         # Extract the point cloud data from the ROS2 message
-        
-        loaded_array = np.frombuffer(pcl_msg.data, dtype=np.float32).reshape(-1, 3) 
+        loaded_array = np.frombuffer(pcl_msg.data, dtype=np.float32).reshape(-1, len(pcl_msg.fields)) 
         o3d_pcl = o3d.geometry.PointCloud()
         o3d_pcl.points = o3d.utility.Vector3dVector(loaded_array)
         

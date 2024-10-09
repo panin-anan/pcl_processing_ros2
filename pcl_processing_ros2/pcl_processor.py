@@ -91,7 +91,9 @@ class PCLprocessor(Node):
             lost_volume = 0.0
         else: 
             #area from bounding box
-            width, height, area = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
+            width, height, area_bb = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
+            #area from convex hull
+            area, hull_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
             self.get_logger().info(f"bbox width: {width * 1000} mm, height: {height * 1000} mm")
             lost_volume = area * self.plate_thickness
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")

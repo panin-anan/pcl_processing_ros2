@@ -3,7 +3,8 @@ import numpy as np
 import open3d as o3d
 from scipy.spatial import cKDTree
 from sklearn.decomposition import PCA
-
+from scipy.spatial import ConvexHull
+import matplotlib.pyplot as plt
 
 class PCLfunctions:
     def __init__(self):
@@ -115,6 +116,20 @@ class PCLfunctions:
 
         return width, height, area
 
+    def compute_convex_hull_area_xy(self, point_cloud):
+        # Step 1: Convert point cloud to numpy array
+        points = np.asarray(point_cloud.points)
+
+        # Step 2: Project the points onto the XY plane
+        xy_points = points[:, 0:2]  # Extract only the X and Y coordinates
+
+        # Step 3: Compute the convex hull using scipy's ConvexHull on the projected XY points
+        hull_2d = ConvexHull(xy_points)
+
+        # Step 4: The area of the convex hull (in the XY plane)
+        area = hull_2d.area
+
+        return area, hull_2d
 
     def sort_plate_cluster(self, pcd, eps=0.0005, min_points=100, remove_outliers=True):
         # Step 1: Segment point cloud into clusters using DBSCAN

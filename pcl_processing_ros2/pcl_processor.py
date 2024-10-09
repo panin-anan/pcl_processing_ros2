@@ -35,9 +35,9 @@ class PCLprocessor(Node):
 
     def init_parameters(self) -> None:
         self.declare_parameter('dist_threshold',                '0.0006')    # filter for plane projection
-        self.declare_parameter('plane_error_allowance',         '10'    )    # in degree
-        self.declare_parameter('clusterscan_eps',               '0.0005')    # size for cluster grouping in DBScan
-        self.declare_parameter('cluster_neighbor',              '30'    )    # number of required neighbour points to remove outliers
+        self.declare_parameter('plane_error_allowance',         '5'    )    # in degree
+        self.declare_parameter('clusterscan_eps',               '0.002')    # size for cluster grouping in DBScan
+        self.declare_parameter('cluster_neighbor',              '20'    )    # number of required neighbour points to remove outliers
         self.declare_parameter('laserline_threshold',           '0.00008')    # scan resolution line axis in m
         self.declare_parameter('feedaxis_threshold',            '0.00012')    # scan resolution feed axis in m
         self.declare_parameter('plate_thickness',               '0.002' )    # in m
@@ -80,7 +80,7 @@ class PCLprocessor(Node):
 
 
         self.get_logger().info('Filtering for changes in pcl')
-        changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.laserline_threshold, y_threshold=self.feedaxis_threshold)
+        changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.self.feedaxis_threshold, y_threshold=self.laserline_threshold)
         
         # after sorting
         changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)

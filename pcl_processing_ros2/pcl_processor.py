@@ -80,7 +80,7 @@ class PCLprocessor(Node):
 
 
         self.get_logger().info('Filtering for changes in pcl')
-        changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.self.feedaxis_threshold, y_threshold=self.laserline_threshold)
+        changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.feedaxis_threshold, y_threshold=self.laserline_threshold)
         
         # after sorting
         changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)

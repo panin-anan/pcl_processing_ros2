@@ -127,7 +127,7 @@ class PCLfunctions:
         hull_2d = ConvexHull(xy_points)
 
         # Step 4: The area of the convex hull (in the XY plane)
-        area = hull_2d.area
+        area = hull_2d.volume
 
         return area, hull_2d
 

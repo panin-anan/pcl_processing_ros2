@@ -12,6 +12,21 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 
 
+from rcl_interfaces.msg import ParameterDescriptor 
+from data_gathering_msgs.srv import RequestPCLVolumeDiff
+from std_msgs.msg import Empty, String 
+from sensor_msgs.msg import PointCloud2
+from std_srvs.srv import Trigger 
+
+import copy
+import os 
+import pathlib 
+from datetime import datetime
+import pandas as pd 
+import numpy as np
+import open3d as o3d
+from functools import partial
+
 
 class PCLpublisher(Node):
     def __init__(self):
@@ -22,16 +37,43 @@ class PCLpublisher(Node):
         self.combine_pcl_publisher = self.create_publisher(PointCloud2,'combined_cloud',10)
         self.create_subscription(Key, 'keydown', self.key_callback, 1)
 
+        self.calculate_volume_trigger = self.create_client(RequestPCLVolumeDiff, 'calculate_volume_lost')
+
         self.cloud_publish_trigger = Key.KEY_P
         self.global_frame_id = 'base_link'
+
+        self.plate_thickness = 0.002  # Initialize plate thickness in m
+
+        self.test_index = 0  # Track number of tests
+        self.settings = []  # This should hold your test settings/requests
+        self.initial_scan = None
+        self.final_scan = None
 
 
     def key_callback(self, msg):
         if msg.code == self.cloud_publish_trigger:
             comb_cloud_pcl = self.load_mesh()
             self.get_logger().info('Loading PCL')
-            self.combine_pcl_publisher.publish(self.create_pcl_msg(comb_cloud_pcl))
-            self.get_logger().info('PCL Published')
+
+            if self.test_index == 0:
+                self.initial_scan = self.create_pcl_msg(comb_cloud_pcl)
+                self.combine_pcl_publisher.publish(self.create_pcl_msg(comb_cloud_pcl))
+                self.get_logger().info('PCL loaded to initial')
+                self.test_index += 1
+            else:
+                self.final_scan = self.create_pcl_msg(comb_cloud_pcl)
+                self.combine_pcl_publisher.publish(self.create_pcl_msg(comb_cloud_pcl))
+                self.get_logger().info('PCL loaded to final')
+                #perform volume calculation
+                req = RequestPCLVolumeDiff.Request()
+                req.initial_pointcloud  = self.initial_scan
+                req.final_pointcloud    = self.final_scan
+                req.plate_thickness     = self.plate_thickness
+                volume_call = self.calculate_volume_trigger.call_async(req)
+
+                #prepare for next consecutive set of data
+                self.initial_scan = self.final_scan
+                self.test_index += 1
 
     def create_pcl_msg(self, o3d_pcl):
         datapoints = np.asarray(o3d_pcl.points, dtype=np.float32)

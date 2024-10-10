@@ -97,27 +97,27 @@ class PCLprocessor(Node):
             width, height, area_bb = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
             #area from convex hull
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
-            area_concave, hull_concave_2d = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d)
+            area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d)
             self.get_logger().info(f"bbox width: {width * 1000} mm, height: {height * 1000} mm")
             self.get_logger().info(f"bbox area: {area_bb * (1000**3)} mm^2, convex_hull_area: {area * (1000**3)} mm^2, concave_hull_area: {area_concave * (1000**3)} mm^2")
             lost_volume = area * self.plate_thickness
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
 
-            # Publish lines connecting hull points
-            hull_lines_msg = self.create_hull_lines_marker(hull_concave_2d)
-            self.publisher_hull_lines.publish(hull_lines_msg)
-
         #transform back to global for visualization
         changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
+        hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
 
         # Prepare and publish grinded cloud and volume message
         msg_stamped = Float32Stamped()
         msg_stamped.data = float(lost_volume)
         self.publisher_volume.publish(msg_stamped)
+
         diff_pcl_global = self.create_pcl_msg(changed_pcl_global)
+        hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))
 
         self.publisher_grinded_cloud.publish(diff_pcl_global) 
-        self.get_logger().info(f"Grinded Cloud Published")
+        self.publisher_hull_lines.publish(hull_lines_msg)
+
         response.volume_difference = lost_volume
         response.difference_pointcloud = diff_pcl_global
         return response 
@@ -175,7 +175,7 @@ class PCLprocessor(Node):
         marker.points.append(marker.points[0])
 
         # Set line width and color
-        marker.scale.x = 0.001  # Line width
+        marker.scale.x = 0.00005  # Line width
         marker.color.a = 1.0   # Alpha (transparency)
         marker.color.r = 1.0   # Red color
 

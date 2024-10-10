@@ -157,7 +157,10 @@ class PCLfunctions:
         y = hull_points[:, 1]
         area = 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
 
-        return area, hull_points
+        hull_cloud = o3d.geometry.PointCloud()
+        hull_cloud.points = o3d.utility.Vector3dVector(hull_points)
+
+        return area, hull_cloud
 
     def sort_plate_cluster(self, pcd, eps=0.0005, min_points=100, remove_outliers=True):
         # Step 1: Segment point cloud into clusters using DBSCAN

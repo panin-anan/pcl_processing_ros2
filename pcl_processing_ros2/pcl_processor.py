@@ -39,7 +39,7 @@ class PCLprocessor(Node):
     def init_parameters(self) -> None:
         self.declare_parameter('dist_threshold',                '0.0006')    # filter for plane projection
         self.declare_parameter('plane_error_allowance',         '5'    )    # in degree
-        self.declare_parameter('clusterscan_eps',               '0.002')    # size for cluster grouping in DBScan
+        self.declare_parameter('clusterscan_eps',               '0.00025')    # size for cluster grouping in DBScan
         self.declare_parameter('cluster_neighbor',              '20'    )    # number of required neighbour points to remove outliers
         self.declare_parameter('laserline_threshold',           '0.00008')    # scan resolution line axis in m
         self.declare_parameter('feedaxis_threshold',            '0.00012')    # scan resolution feed axis in m

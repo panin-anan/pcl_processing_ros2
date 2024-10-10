@@ -32,7 +32,7 @@ def generate_launch_description():
             'cluster_neighbor':               '20',                # filter outlier with #of neighbour point threshold
             'plate_thickness':                  '2',                # in mm
             'plane_error_allowance':            '5',               # in degree
-            'clusterscan_eps':               '0.002',              # cluster minimum dist grouping in m
+            'clusterscan_eps':               '0.00025',              # cluster minimum dist grouping in m
             'laserline_threshold':                   '0.00008',      # scan resolution line axis in m
             'feedaxis_threshold':                     '0.00012',     # scan resolution robot feed axis in m
             }

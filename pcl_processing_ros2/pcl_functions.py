@@ -5,6 +5,7 @@ from scipy.spatial import cKDTree
 from sklearn.decomposition import PCA
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
+from concave_hull import concave_hull, concave_hull_indexes
 
 class PCLfunctions:
     def __init__(self):
@@ -130,6 +131,25 @@ class PCLfunctions:
         area = hull_2d.volume
 
         return area, hull_2d
+
+    def compute_concave_hull_area_xy(self, point_cloud, hull_convex_2d):
+        points = np.asarray(point_cloud.points)
+        
+        for simplex in hull_convex_2d.simplices:
+            plt.plot(points[simplex, 0], points[simplex, 1], "g-", alpha=0.5)
+
+        idxes = concave_hull_indexes(
+            points[:, :2],
+            length_threshold=50,
+        )
+        # you can get coordinates by `points[idxes]`
+        assert np.all(points[idxes] == concave_hull(points, length_threshold=50))
+
+        for f, t in zip(idxes[:-1], idxes[1:]):  # noqa
+            seg = points[[f, t]]
+            plt.plot(seg[:, 0], seg[:, 1], "r-", alpha=0.5)
+        # plt.savefig('hull.png')
+        plt.show()
 
     def sort_plate_cluster(self, pcd, eps=0.0005, min_points=100, remove_outliers=True):
         # Step 1: Segment point cloud into clusters using DBSCAN

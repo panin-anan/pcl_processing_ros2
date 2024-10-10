@@ -6,6 +6,8 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import PointCloud2, PointField
 from stamped_std_msgs.msg import Float32Stamped
 from data_gathering_msgs.srv import RequestPCLVolumeDiff
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point
 
 import open3d as o3d
 import numpy as np
@@ -24,8 +26,9 @@ class PCLprocessor(Node):
 
         #Publisher to publish volume lost
         self.publisher_volume = self.create_publisher(Float32Stamped, '/scanner/volume', 10)
-        self.publisher_grinded_cloud = self.create_publisher(PointCloud2,'grinded_cloud', 10)
-        
+        self.publisher_grinded_cloud = self.create_publisher(PointCloud2,'/grinded_cloud', 10)
+        self.publisher_hull_lines = self.create_publisher(Marker, '/concave_hull_lines', 10)  # Publisher for concave hull lines
+
         self.volume_calculation_server = self.create_service(RequestPCLVolumeDiff, 'calculate_volume_lost', self.calculate_volume_difference, callback_group=MutuallyExclusiveCallbackGroup())
 
         #PCL Collector
@@ -94,11 +97,15 @@ class PCLprocessor(Node):
             width, height, area_bb = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
             #area from convex hull
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
-            self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d)
+            area_concave, hull_concave_2d = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d)
             self.get_logger().info(f"bbox width: {width * 1000} mm, height: {height * 1000} mm")
-            #self.get_logger().info(f"bbox area: {area_bb * (1000**3)} mm^2, hull_area: {area * (1000**3)} mm^2")
+            self.get_logger().info(f"bbox area: {area_bb * (1000**3)} mm^2, convex_hull_area: {area * (1000**3)} mm^2, concave_hull_area: {area_concave * (1000**3)} mm^2")
             lost_volume = area * self.plate_thickness
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
+
+            # Publish lines connecting hull points
+            hull_lines_msg = self.create_hull_lines_marker(hull_concave_2d)
+            self.publisher_hull_lines.publish(hull_lines_msg)
 
         #transform back to global for visualization
         changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
@@ -108,8 +115,9 @@ class PCLprocessor(Node):
         msg_stamped.data = float(lost_volume)
         self.publisher_volume.publish(msg_stamped)
         diff_pcl_global = self.create_pcl_msg(changed_pcl_global)
-        self.publisher_grinded_cloud.publish(diff_pcl_global) 
 
+        self.publisher_grinded_cloud.publish(diff_pcl_global) 
+        self.get_logger().info(f"Grinded Cloud Published")
         response.volume_difference = lost_volume
         response.difference_pointcloud = diff_pcl_global
         return response 
@@ -143,6 +151,35 @@ class PCLprocessor(Node):
         
         self.get_logger().info('Converted combined pointcloud for open3d')
         return o3d_pcl
+
+    def create_hull_lines_marker(self, hull_points):
+        """Helper function to create a Marker message with lines connecting hull points"""
+        marker = Marker()
+        marker.header.frame_id = self.global_frame_id
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = "concave_hull"
+        marker.id = 0
+        marker.type = Marker.LINE_STRIP
+        marker.action = Marker.ADD
+        marker.pose.orientation.w = 1.0
+
+        # Add points from hull to marker
+        for point in hull_points:
+            p = Point()
+            p.x = point[0]
+            p.y = point[1]
+            p.z = point[2]  # Set to 0 if the points are 2D or adjust as necessary
+            marker.points.append(p)
+
+        # Connect the last point to the first to close the loop
+        marker.points.append(marker.points[0])
+
+        # Set line width and color
+        marker.scale.x = 0.001  # Line width
+        marker.color.a = 1.0   # Alpha (transparency)
+        marker.color.r = 1.0   # Red color
+
+        return marker
 
 def main(args=None):
     rclpy.init(args=args)

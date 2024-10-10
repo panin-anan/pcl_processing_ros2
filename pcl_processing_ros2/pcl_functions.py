@@ -132,24 +132,32 @@ class PCLfunctions:
 
         return area, hull_2d
 
-    def compute_concave_hull_area_xy(self, point_cloud, hull_convex_2d):
+    def compute_concave_hull_area_xy(self, point_cloud, hull_convex_2d, concave_resolution=0.0025):
         points = np.asarray(point_cloud.points)
-        
-        for simplex in hull_convex_2d.simplices:
-            plt.plot(points[simplex, 0], points[simplex, 1], "g-", alpha=0.5)
+
+        #plt.scatter(points[:, 0], points[:, 1], s=0.5, color='b', alpha=0.5)
 
         idxes = concave_hull_indexes(
             points[:, :2],
-            length_threshold=50,
+            length_threshold=concave_resolution,
         )
         # you can get coordinates by `points[idxes]`
-        assert np.all(points[idxes] == concave_hull(points, length_threshold=50))
+        assert np.all(points[idxes] == concave_hull(points, length_threshold=concave_resolution))
 
         for f, t in zip(idxes[:-1], idxes[1:]):  # noqa
             seg = points[[f, t]]
-            plt.plot(seg[:, 0], seg[:, 1], "r-", alpha=0.5)
+            #plt.plot(seg[:, 0], seg[:, 1], "r-", alpha=0.5)
         # plt.savefig('hull.png')
-        plt.show()
+        #plt.gca().set_aspect('equal', adjustable='box')
+        #plt.show()
+
+        # Calculate the area using the Shoelace formula
+        hull_points = points[idxes]
+        x = hull_points[:, 0]
+        y = hull_points[:, 1]
+        area = 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+
+        return area, hull_points
 
     def sort_plate_cluster(self, pcd, eps=0.0005, min_points=100, remove_outliers=True):
         # Step 1: Segment point cloud into clusters using DBSCAN

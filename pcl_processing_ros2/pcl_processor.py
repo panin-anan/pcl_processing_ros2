@@ -5,6 +5,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from sensor_msgs.msg import PointCloud2, PointField
 from stamped_std_msgs.msg import Float32Stamped
+from std_msgs.msg import Header
 from data_gathering_msgs.srv import RequestPCLVolumeDiff
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
@@ -110,8 +111,7 @@ class PCLprocessor(Node):
         changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
 
         # Prepare and publish grinded cloud and volume message
-        msg_stamped = Float32Stamped()
-        msg_stamped.data = float(lost_volume)
+        msg_stamped = Float32Stamped(data=float(lost_volume) * 1000**3, header=Header(stamp=self.get_clock().now().to_msg()))
         self.publisher_volume.publish(msg_stamped)
 
         diff_pcl_global = self.create_pcl_msg(changed_pcl_global)

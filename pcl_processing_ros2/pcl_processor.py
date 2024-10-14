@@ -45,6 +45,7 @@ class PCLprocessor(Node):
         self.declare_parameter('laserline_threshold',           '0.00008')    # scan resolution line axis in m
         self.declare_parameter('feedaxis_threshold',            '0.00012')    # scan resolution feed axis in m
         self.declare_parameter('plate_thickness',               '0.002' )    # in m
+        self.declare_parameter('concave_resolution',            '0.0005')   # in m
 
         self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
         self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
@@ -53,6 +54,7 @@ class PCLprocessor(Node):
         self.clusterscan_eps = float(self.get_parameter('clusterscan_eps').get_parameter_value().string_value)
         self.laserline_threshold = float(self.get_parameter('laserline_threshold').get_parameter_value().string_value)
         self.feedaxis_threshold = float(self.get_parameter('feedaxis_threshold').get_parameter_value().string_value)
+        self.concave_resolution = float(self.get_parameter('concave_resolution').get_parameter_value().string_value)
 
     def calculate_volume_difference(self, request, response):
         self.get_logger().info("Volume calculation request received...")
@@ -99,7 +101,7 @@ class PCLprocessor(Node):
             width, height, area_bb = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
             #area from convex hull
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
-            area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d)
+            area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)
             self.get_logger().info(f"bbox width: {width * 1000} mm, height: {height * 1000} mm")
             self.get_logger().info(f"bbox area: {area_bb * (1000**3)} mm^2, convex_hull_area: {area * (1000**3)} mm^2, concave_hull_area: {area_concave * (1000**3)} mm^2")
             lost_volume = area * self.plate_thickness

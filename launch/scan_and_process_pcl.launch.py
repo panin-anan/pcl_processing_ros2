@@ -26,6 +26,7 @@ def generate_launch_description():
             'clusterscan_eps':               '0.00025',              # cluster minimum dist grouping in m
             'laserline_threshold':           '0.00008',      # scan resolution line axis in m
             'feedaxis_threshold':            '0.00012',     # scan resolution robot feed axis in m
+            'concave_resolution':             '0.0005',       #concave hull resolution
             }
         ]
     )

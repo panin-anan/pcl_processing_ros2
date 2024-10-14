@@ -132,7 +132,7 @@ class PCLfunctions:
 
         return area, hull_2d
 
-    def compute_concave_hull_area_xy(self, point_cloud, hull_convex_2d, concave_resolution=0.0025):
+    def compute_concave_hull_area_xy(self, point_cloud, hull_convex_2d, concave_resolution=0.0005):
         points = np.asarray(point_cloud.points)
 
         #plt.scatter(points[:, 0], points[:, 1], s=0.5, color='b', alpha=0.5)

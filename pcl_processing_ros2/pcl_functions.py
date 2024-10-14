@@ -162,36 +162,48 @@ class PCLfunctions:
 
         return area, hull_cloud
 
-    def sort_plate_cluster(self, pcd, eps=0.0005, min_points=100, remove_outliers=True):
-        # Step 1: Segment point cloud into clusters using DBSCAN
-        labels = np.array(pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True))
-    
+    def sort_plate_cluster(self, pcd, eps=0.0005, min_points=30, remove_outliers=False, use_downsampling=False, downsample_voxel_size=0.0002):
+        if use_downsampling and downsample_voxel_size > 0:
+            downsampled_pcd = pcd.voxel_down_sample(voxel_size=downsample_voxel_size)
+        else:
+            downsampled_pcd = pcd
+
+        # Step 2: Segment downsampled point cloud into clusters using DBSCAN
+        labels = np.array(downsampled_pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True))
+
         # Number of clusters (label -1 indicates noise)
         num_clusters = labels.max() + 1
+        if num_clusters == 0:
+            return o3d.geometry.PointCloud()  # Return empty point cloud if no clusters are found
 
-        # Step 2: Find the largest cluster
+        # Step 3: Find the largest cluster in the downsampled point cloud
         max_cluster_size = 0
-        largest_cluster_pcd = None
+        largest_cluster_indices = None
 
         for cluster_idx in range(num_clusters):
             # Get the indices of the points that belong to the current cluster
             cluster_indices = np.where(labels == cluster_idx)[0]
-        
             # If this cluster is the largest we've found, update the largest cluster info
             if len(cluster_indices) > max_cluster_size:
                 max_cluster_size = len(cluster_indices)
-                largest_cluster_pcd = pcd.select_by_index(cluster_indices)
+                largest_cluster_indices = cluster_indices
 
-        print(f"Largest cluster has {max_cluster_size} points")
+        if largest_cluster_indices is None:
+            return o3d.geometry.PointCloud()  # Return empty point cloud if no largest cluster is found
 
-        # Optionally: Remove outliers (if remove_outliers is set to True)
-        #if remove_outliers and largest_cluster_pcd is not None:
-        #    largest_cluster_pcd, _ = largest_cluster_pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+        # Step 4: Map the largest cluster back to the original point cloud
+        largest_cluster_pcd = downsampled_pcd.select_by_index(largest_cluster_indices)
 
-        if largest_cluster_pcd is None:
-            largest_cluster_pcd = o3d.geometry.PointCloud()
+        # Find corresponding points in the original high-resolution point cloud
+        distances = pcd.compute_point_cloud_distance(largest_cluster_pcd)
+        original_cluster_indices = np.where(np.asarray(distances) < downsample_voxel_size*10)[0]  # Tolerance to find nearest neighbors
+        high_res_largest_cluster_pcd = pcd.select_by_index(original_cluster_indices)
 
-        return largest_cluster_pcd
+        # Optionally remove outliers from the largest cluster
+        if remove_outliers and high_res_largest_cluster_pcd is not None:
+            high_res_largest_cluster_pcd, _ = high_res_largest_cluster_pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+
+        return high_res_largest_cluster_pcd
 
     def sort_largest_cluster(self, pcd, eps=0.005, min_points=30, remove_outliers=True):
         # Step 1: Segment point cloud into clusters using DBSCAN

@@ -46,6 +46,7 @@ class PCLprocessor(Node):
         self.declare_parameter('feedaxis_threshold',            '0.00012')    # scan resolution feed axis in m
         self.declare_parameter('plate_thickness',               '0.002' )    # in m
         self.declare_parameter('concave_resolution',            '0.0005')   # in m
+        self.declare_parameter('filter_down_size',              '0.0002')   #   in m
 
         self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
         self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
@@ -55,6 +56,7 @@ class PCLprocessor(Node):
         self.laserline_threshold = float(self.get_parameter('laserline_threshold').get_parameter_value().string_value)
         self.feedaxis_threshold = float(self.get_parameter('feedaxis_threshold').get_parameter_value().string_value)
         self.concave_resolution = float(self.get_parameter('concave_resolution').get_parameter_value().string_value)
+        self.filter_down_size = float(self.get_parameter('filter_down_size').get_parameter_value().string_value)
 
     def calculate_volume_difference(self, request, response):
         self.get_logger().info("Volume calculation request received...")
@@ -66,8 +68,16 @@ class PCLprocessor(Node):
         #filter point by plane and project onto it
         pcl1, mesh1_pca_basis, mesh1_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
         pcl2, mesh2_pca_basis, mesh2_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl2, distance_threshold=self.dist_threshold)
-        pcl1 = self.pcl_functions.sort_plate_cluster(pcl1, eps=0.0005, min_points=100)
-        pcl2 = self.pcl_functions.sort_plate_cluster(pcl2, eps=0.0005, min_points=100)
+        pcl1_plane = pcl1
+        pcl2_plane = pcl2
+        pcl1 = self.pcl_functions.sort_plate_cluster(pcl1_plane, eps=0.001, min_points=30, use_downsampling=True, downsample_voxel_size=self.filter_down_size)
+        pcl2 = self.pcl_functions.sort_plate_cluster(pcl2_plane, eps=0.001, min_points=30, use_downsampling=True, downsample_voxel_size=self.filter_down_size)
+
+        # Check if the largest cluster has at least half the points of the original point cloud
+        if len(pcl1.points) < len(pcl1_plane.points) / 2:
+            self.get_lgoger().info(f"voxel down algorithm failed. Resorting with original pcl")
+            pcl1 = self.pcl_functions.sort_plate_cluster(pcl1_plane, eps=0.0005, min_points=30, use_downsampling=False)
+            pcl2 = self.pcl_functions.sort_plate_cluster(pcl2_plane, eps=0.0005, min_points=30, use_downsampling=False)
 
         self.get_logger().info('PCL Projected on plane')
 
@@ -75,7 +85,7 @@ class PCLprocessor(Node):
         cos_angle = np.dot(mesh1_pca_basis[2], mesh2_pca_basis[2]) / (np.linalg.norm(mesh1_pca_basis[2]) * np.linalg.norm(mesh2_pca_basis[2]))
         angle = np.arccos(np.clip(cos_angle, -1.0, 1.0)) * 180 / np.pi
         if abs(angle) > self.plane_error_allowance:     #10 degree misalignment throw error
-            self.get_lgoger().error(f"Plane normals differ too much: {angle} degrees. Something may have moved in between recording the two pointclouds, or the wrong plane was detected for one or more of the pointclouds.")
+            self.get_logger().error(f"Plane normals differ too much: {angle} degrees. Something may have moved in between recording the two pointclouds, or the wrong plane was detected for one or more of the pointclouds.")
             return response 
 
         projected_points_mesh2 = self.pcl_functions.project_points_onto_plane(np.asarray(pcl2.points), mesh1_pca_basis[2], mesh1_plane_centroid)

@@ -73,7 +73,8 @@ class PCLprocessor(Node):
         cos_angle = np.dot(mesh1_pca_basis[2], mesh2_pca_basis[2]) / (np.linalg.norm(mesh1_pca_basis[2]) * np.linalg.norm(mesh2_pca_basis[2]))
         angle = np.arccos(np.clip(cos_angle, -1.0, 1.0)) * 180 / np.pi
         if abs(angle) > self.plane_error_allowance:     #10 degree misalignment throw error
-            raise ValueError(f"Plane normals differ too much: {angle} degrees")
+            self.get_lgoger().error(f"Plane normals differ too much: {angle} degrees. Something may have moved in between recording the two pointclouds, or the wrong plane was detected for one or more of the pointclouds.")
+            return response 
 
         projected_points_mesh2 = self.pcl_functions.project_points_onto_plane(np.asarray(pcl2.points), mesh1_pca_basis[2], mesh1_plane_centroid)
         pcl2.points = o3d.utility.Vector3dVector(projected_points_mesh2)

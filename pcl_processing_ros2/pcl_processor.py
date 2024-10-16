@@ -47,6 +47,7 @@ class PCLprocessor(Node):
         self.declare_parameter('plate_thickness',               '0.002' )    # in m
         self.declare_parameter('concave_resolution',            '0.0005')   # in m
         self.declare_parameter('filter_down_size',              '0.0002')   #   in m
+        self.declare_parameter('belt_width_threshold',          '0.020')    # in m
 
         self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
         self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
@@ -57,6 +58,7 @@ class PCLprocessor(Node):
         self.feedaxis_threshold = float(self.get_parameter('feedaxis_threshold').get_parameter_value().string_value)
         self.concave_resolution = float(self.get_parameter('concave_resolution').get_parameter_value().string_value)
         self.filter_down_size = float(self.get_parameter('filter_down_size').get_parameter_value().string_value)
+        self.belt_width_threshold = float(self.get_parameter('belt_width_threshold').get_parameter_value().string_value)
 
     def calculate_volume_difference(self, request, response):
         self.get_logger().info("Volume calculation request received...")
@@ -98,7 +100,7 @@ class PCLprocessor(Node):
 
         self.get_logger().info('Filtering for changes in pcl')
         changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.feedaxis_threshold, y_threshold=self.laserline_threshold)
-        
+        changed_pcl_local_all = changed_pcl_local
         # after sorting
         changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)
 
@@ -108,7 +110,10 @@ class PCLprocessor(Node):
             lost_volume = 0.0
         else: 
             #area from bounding box
-            width, height, area_bb = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
+            height, width, area_bb = self.pcl_functions.create_bbox_from_pcl(changed_pcl_local)
+            if width < self.belt_width_threshold:
+                self.get_logger().info("clustering not appropriate. increasing threshold")
+                changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps*5, min_points=self.cluster_neighbor, remove_outliers=True)
             #area from convex hull
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
             area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)

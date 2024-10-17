@@ -118,8 +118,8 @@ class PCLprocessor(Node):
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
             area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)
             self.get_logger().info(f"bbox width: {width * 1000} mm, height: {height * 1000} mm")
-            self.get_logger().info(f"bbox area: {area_bb * (1000**3)} mm^2, convex_hull_area: {area * (1000**3)} mm^2, concave_hull_area: {area_concave * (1000**3)} mm^2")
-            lost_volume = area * self.plate_thickness
+            self.get_logger().info(f"bbox area: {area_bb * (1000**2)} mm^2, concave_hull_area: {area_concave * (1000**2)} mm^2")
+            lost_volume = area_concave * self.plate_thickness
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
             hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
             hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))

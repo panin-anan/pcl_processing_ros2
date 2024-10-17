@@ -261,3 +261,77 @@ class PCLfunctions:
         global_pcl.points = o3d.utility.Vector3dVector(global_points)
 
         return global_pcl
+    
+    def calculate_volume_difference(self, pcl1, pcl2, plate_thickness, settings: dict, logger=None):
+        #filter point by plane and project onto it
+        pcl1, mesh1_pca_basis, mesh1_plane_centroid = self.filter_project_points_by_plane(pcl1, distance_threshold=settings['dist_threshold'])
+        pcl2, mesh2_pca_basis, mesh2_plane_centroid = self.filter_project_points_by_plane(pcl2, distance_threshold=settings['dist_threshold'])
+        pcl1_plane = pcl1
+        pcl2_plane = pcl2
+        pcl1 = self.sort_plate_cluster(pcl1_plane, eps=0.001, min_points=30, use_downsampling=True, downsample_voxel_size=settings['filter_down_size'])
+        pcl2 = self.sort_plate_cluster(pcl2_plane, eps=0.001, min_points=30, use_downsampling=True, downsample_voxel_size=settings['filter_down_size'])
+
+        # Check if the largest cluster has at least half the points of the original point cloud
+        if len(pcl1.points) < len(pcl1_plane.points) / 2:
+            if logger is not None:
+                logger.info(f"voxel down algorithm failed. Resorting with original pcl")
+            pcl1 = self.sort_plate_cluster(pcl1_plane, eps=0.0005, min_points=30, use_downsampling=False)
+            pcl2 = self.sort_plate_cluster(pcl2_plane, eps=0.0005, min_points=30, use_downsampling=False)
+
+        if logger is not None:
+            logger.info('PCL Projected on plane')
+
+        # Check alignment
+        cos_angle = np.dot(mesh1_pca_basis[2], mesh2_pca_basis[2]) / (np.linalg.norm(mesh1_pca_basis[2]) * np.linalg.norm(mesh2_pca_basis[2]))
+        angle = np.arccos(np.clip(cos_angle, -1.0, 1.0)) * 180 / np.pi
+        if abs(angle) > settings['plane_error_allowance']:     #10 degree misalignment throw error
+            if logger is not None:
+                logger.error(f"Plane normals differ too much: {angle} degrees. Something may have moved in between recording the two pointclouds, or the wrong plane was detected for one or more of the pointclouds.")
+            return None
+
+        projected_points_mesh2 = self.project_points_onto_plane(np.asarray(pcl2.points), mesh1_pca_basis[2], mesh1_plane_centroid)
+        pcl2.points = o3d.utility.Vector3dVector(projected_points_mesh2)
+
+        #transform points to local xy plane
+        pcl1_local = self.transform_to_local_pca_coordinates(pcl1, mesh1_pca_basis, mesh1_plane_centroid )
+        pcl2_local = self.transform_to_local_pca_coordinates(pcl2, mesh1_pca_basis, mesh1_plane_centroid )
+
+        if logger is not None:
+            logger.info('Filtering for changes in pcl')
+        changed_pcl_local = self.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=settings['feedaxis_threshold'], y_threshold=settings['laserline_threshold'])
+        changed_pcl_local_all = changed_pcl_local
+        # after sorting
+        changed_pcl_local = self.sort_largest_cluster(changed_pcl_local, eps=settings['clusterscan_eps'], min_points=settings['cluster_neighbor'], remove_outliers=True)
+
+        hull_cloud_global = None 
+        # Check if there are any missing points detected
+        if changed_pcl_local is None or len(np.asarray(changed_pcl_local.points)) == 0:
+            if logger is not None:
+                logger.info("No detectable difference between point clouds. Lost volume is 0.")
+            lost_volume = 0.0
+        else: 
+            #area from bounding box
+            height, width, area_bb = self.create_bbox_from_pcl(changed_pcl_local)
+            if width < settings['belt_width_threshold']:
+                if logger is not None:
+                    logger.info("clustering not appropriate. increasing threshold")
+                changed_pcl_local = self.sort_largest_cluster(changed_pcl_local_all, eps=settings['clusterscan_eps']*5, min_points=settings['cluster_neighbor'], remove_outliers=True)
+            #area from convex hull
+            area, hull_convex_2d = self.compute_convex_hull_area_xy(changed_pcl_local)
+
+            area_concave, hull_concave_2d_cloud = self.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d, concave_resolution= settings['concave_resolution'])
+            if logger is not None:
+                logger.info(f"bbox width: {width * 1000} mm, height: {height * 1000} mm")
+                logger.info(f"bbox area: {area_bb * (1000**2)} mm^2, concave_hull_area: {area_concave * (1000**2)} mm^2")
+            lost_volume = area_concave * plate_thickness
+
+            if logger is not None:
+                logger.info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
+            hull_cloud_global = self.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
+            
+            
+        
+        #transform back to global for visualization
+        changed_pcl_global = self.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
+
+        return lost_volume, changed_pcl_global, hull_cloud_global

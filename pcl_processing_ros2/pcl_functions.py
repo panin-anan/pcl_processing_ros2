@@ -6,6 +6,7 @@ from sklearn.decomposition import PCA
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 from concave_hull import concave_hull, concave_hull_indexes
+import copy
 
 class PCLfunctions:
     def __init__(self):
@@ -116,6 +117,55 @@ class PCLfunctions:
         area = width * height
 
         return width, height, area
+
+    def create_bbox_from_pcl_axis_aligned(self, pcl):
+        # Step 1: Convert point cloud to numpy array
+        points = np.asarray(pcl.points)
+        dummy_pcl = copy.deepcopy(pcl)
+        # Step 2: Initialize variables to store the minimum width and corresponding bounding box
+        min_width = float('inf')
+        best_bbox = None
+        best_axes = None
+        best_angle = 0
+        
+        # Step 3: Iterate over angles to find the orientation with minimal bounding box width
+        for angle in np.linspace(0, np.pi, 100):  # 100 steps from 0 to 180 degrees
+            # Step 4: Create the 2D rotation matrix around the Z-axis
+            rotation_matrix = np.array([
+                [np.cos(angle), -np.sin(angle)],
+                [np.sin(angle), np.cos(angle)]
+            ])
+            
+            # Step 5: Rotate points around the Z-axis in the XY plane
+            xy_points = points[:, 0:2]  # Take X and Y coordinates (planar in XY plane)
+            rotated_points = np.dot(xy_points, rotation_matrix.T)
+            
+            # Step 6: Get the Axis-Aligned Bounding Box (AABB) for the rotated points
+            min_bound = np.min(rotated_points, axis=0)
+            max_bound = np.max(rotated_points, axis=0)
+            
+            # Calculate width and height of the bounding box
+            width = max_bound[0] - min_bound[0]
+            height = max_bound[1] - min_bound[1]
+            
+            # Step 7: If this rotation gives a smaller width, update the minimum width and bbox
+            if width < min_width:
+                min_width = width
+                min_bound_3d = np.append(min_bound, 0)  # Append Z=0
+                max_bound_3d = np.append(max_bound, 0)  # Append Z=0
+                bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound_3d, max_bound=max_bound_3d)
+                best_bbox = bbox
+                best_angle = angle
+    
+        final_rotation_matrix = np.array([
+            [np.cos(best_angle), -np.sin(best_angle), 0],
+            [np.sin(best_angle), np.cos(best_angle), 0],
+            [0, 0, 1]
+        ])
+
+        area = min_width * height
+
+        return min_width, height, area
 
     def compute_convex_hull_area_xy(self, point_cloud):
         # Step 1: Convert point cloud to numpy array

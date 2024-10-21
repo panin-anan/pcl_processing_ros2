@@ -1,8 +1,8 @@
 # SAMXL_pointcloud_area_detection
 
 ## Overview
-Code to perform automated testing of material removal using a pneumatic grinder. 
-It uses a laser line scanner on a UR16 to create a scan of the test plate. The grinder is then engaged and grinds away material for a set force, rpm, and duration. A second scan is then performed to measure the amount of material removed. The test data is recorded using rosbags.
+Code to perform volume loss calculation between two point clouds: before grinding and after grinding, scanned by laser line scanner.
+The node works in conjuction with data_gathering. The test data is recorded using rosbags.
 
 ## Installation
 
@@ -52,9 +52,12 @@ install/setup.bash
 ```
 
 
-## Nodes
-### data_collector
-A node that connects to the PLC with grinder, and sends commands to the ACF node. It performs a grind for a requested force, RPM, and contact duration.
+## Node
+### pcl_processing
+
+
+### pcl_publish_manual
+A node that manually publish point cloud message to pcl_processing to manually evaluate tested data/point clouds
 Parameters:
 - `plc_target_ams`: AMS ID of the PLC.
 - `plc_target_ip`: IP address of the PLC.

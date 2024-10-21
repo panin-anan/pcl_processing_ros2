@@ -1,8 +1,8 @@
 # SAMXL_pointcloud_area_detection
 
 ## Overview
-Code to perform volume loss calculation between two point clouds: before grinding and after grinding, scanned by laser line scanner.
-The node works in conjuction with data_gathering. The test data is recorded using rosbags.
+Code to perform volume loss calculation between two point clouds: from before grinding and from after grinding, scanned by laser line scanner.
+The node works in conjuction with `data_gathering` repositories from `git@github.com:Luka140/data_gathering.git`.
 
 ## Installation
 
@@ -23,41 +23,26 @@ sudo apt install ros-humble-rosbag2-storage-mcap
 ```
 
 #### Building
-To build from source, clone the latest version from this repository into your workspace along with the following repositories
-
-- `ferrobotics_acf`: Controls the ACF
-- `stamped_std_msgs`: Stamped standard messages for data storage
-- `data_gatherin_msgs`: Additional msgs
-- `ur_trajectory_controller`: Controls the UR16
-- `scancontrol`: ROS Driver for Scancontrol laser line scanners
-- `lls_processing`: Compiles 3D pointcloud reconstructions based on TF transfers
-- `pcl_processing_ros2`: Used to calculate volume loss between two scans
+To build from source, clone the latest version from this repository into your workspace.
 
 ```bash
-git clone git@github.com:Luka140/data_gathering.git
-git clone git@github.com:Luka140/ferrobotics_acf.git -b humble
-git clone git@github.com:Luka140/stamped_std_msgs.git
-git clone git@github.com:Luka140/data_gathering_msgs.git
-git clone git@github.com:Luka140/ur_trajectory_controller.git
-git clone git@github.com:Luka140/lls_processing.git
-git clone git@github.com:Luka140/scancontrol.git -b ros2-devel
 git clone git@github.com:panin-ananwa/pcl_processing_ros2.git
 
 ```
-and compile all of the packages:
-To build, after cloning all the packages:
+and compile the package:
+To build, after cloning the package:
 ```bash
 colcon build --symlink-install
 install/setup.bash
 ```
 
 
-## Node
+## Nodes
 ### pcl_processing
-
+A node that automates the volume loss calculation process. The node waits for Service Request
 
 ### pcl_publish_manual
-A node that manually publish point cloud message to pcl_processing to manually evaluate tested data/point clouds
+A node that can be used to manually publish saved point cloud to pcl_processing, in order to manually evaluate tested data/point clouds
 Parameters:
 - `plc_target_ams`: AMS ID of the PLC.
 - `plc_target_ip`: IP address of the PLC.

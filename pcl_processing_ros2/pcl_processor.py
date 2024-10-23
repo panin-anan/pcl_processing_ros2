@@ -62,7 +62,8 @@ class PCLprocessor(Node):
 
     def calculate_volume_difference(self, request, response):
         self.get_logger().info("Volume calculation request received...")
-        
+        response.success = True  # Flag to be flipped if anything goes wrong 
+
         pcl1 = self.convert_ros_to_open3d(request.initial_pointcloud)
         pcl2 = self.convert_ros_to_open3d(request.final_pointcloud)
         self.plate_thickness = request.plate_thickness
@@ -88,6 +89,8 @@ class PCLprocessor(Node):
         angle = np.arccos(np.clip(cos_angle, -1.0, 1.0)) * 180 / np.pi
         if abs(angle) > self.plane_error_allowance:     #10 degree misalignment throw error
             self.get_logger().error(f"Plane normals differ too much: {angle} degrees. Something may have moved in between recording the two pointclouds, or the wrong plane was detected for one or more of the pointclouds.")
+            response.success = False
+            response.message += "Plane normals differ too much: {angle} degrees. Something may have moved in between recording the two pointclouds, or the wrong plane was detected for one or more of the pointclouds."
             return response 
 
         projected_points_mesh2 = self.pcl_functions.project_points_onto_plane(np.asarray(pcl2.points), mesh1_pca_basis[2], mesh1_plane_centroid)
@@ -108,12 +111,22 @@ class PCLprocessor(Node):
         if changed_pcl_local is None or len(np.asarray(changed_pcl_local.points)) == 0:
             self.get_logger().info("No detectable difference between point clouds. Lost volume is 0.")
             lost_volume = 0.0
+
         else: 
             #area from bounding box
             height, width, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
+
+            # Adjust cluster settings to allow for detecting smaller removed volumes 
             if width < self.belt_width_threshold:
                 self.get_logger().info("clustering not appropriate. increasing threshold")
                 changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps*5, min_points=self.cluster_neighbor, remove_outliers=True)
+                height, width, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
+
+            # If it is still bad after reclustering, mark as failure 
+            if width < self.belt_width_threshold:
+                response.success = False
+                response.message += f"The removed volume width of {width * 1000} mm is smaller than the belt width threshold {self.belt_width_threshold * 1000} mm. Detecting lost volume failed."
+            
             #area from convex hull
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
             area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)

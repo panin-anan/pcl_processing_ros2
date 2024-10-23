@@ -109,26 +109,27 @@ class PCLfunctions:
         min_bound = np.min(xy_points, axis=0)
         max_bound = np.max(xy_points, axis=0)
 
-        # Step 4: Calculate width and height of the 2D bounding box (in XY plane)
-        width = max_bound[0] - min_bound[0]  # X-axis difference
-        height = max_bound[1] - min_bound[1]  # Y-axis difference
+        # Step 4: Calculate glob_z and glob_y of the 2D bounding box (in XY plane)
+        glob_z = max_bound[0] - min_bound[0]  # X-axis difference
+        glob_y = max_bound[1] - min_bound[1]  # Y-axis difference
 
         # Step 5: Calculate the 2D area (in XY plane)
-        area = width * height
+        area = glob_z * glob_y
 
-        return width, height, area
+        return glob_z, glob_y, area
 
     def create_bbox_from_pcl_axis_aligned(self, pcl):
         # Step 1: Convert point cloud to numpy array
         points = np.asarray(pcl.points)
         dummy_pcl = copy.deepcopy(pcl)
-        # Step 2: Initialize variables to store the minimum width and corresponding bounding box
-        min_width = float('inf')
+        # Step 2: Initialize variables to store the minimum glob_z and corresponding bounding box
+        min_glob_z = float('inf')
+        min_glob_y = float('inf')
         best_bbox = None
         best_axes = None
         best_angle = 0
         
-        # Step 3: Iterate over angles to find the orientation with minimal bounding box width
+        # Step 3: Iterate over angles to find the orientation with minimal bounding box glob_z
         for angle in np.linspace(0, np.pi, 100):  # 100 steps from 0 to 180 degrees
             # Step 4: Create the 2D rotation matrix around the Z-axis
             rotation_matrix = np.array([
@@ -144,13 +145,14 @@ class PCLfunctions:
             min_bound = np.min(rotated_points, axis=0)
             max_bound = np.max(rotated_points, axis=0)
             
-            # Calculate width and height of the bounding box
-            width = max_bound[0] - min_bound[0]
-            height = max_bound[1] - min_bound[1]
+            # Calculate glob_z and glob_y of the bounding box
+            glob_z = max_bound[0] - min_bound[0]
+            glob_y = max_bound[1] - min_bound[1]
             
-            # Step 7: If this rotation gives a smaller width, update the minimum width and bbox
-            if width < min_width:
-                min_width = width
+            # Step 7: If this rotation gives a smaller glob_z, update the minimum glob_z and bbox
+            if glob_z < min_glob_z:
+                min_glob_z = glob_z
+                min_glob_y = glob_y
                 min_bound_3d = np.append(min_bound, 0)  # Append Z=0
                 max_bound_3d = np.append(max_bound, 0)  # Append Z=0
                 bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound_3d, max_bound=max_bound_3d)
@@ -163,9 +165,9 @@ class PCLfunctions:
             [0, 0, 1]
         ])
 
-        area = min_width * height
+        area = min_glob_z * min_glob_y
 
-        return min_width, height, area
+        return min_glob_z, min_glob_y, area
 
     def compute_convex_hull_area_xy(self, point_cloud):
         # Step 1: Convert point cloud to numpy array

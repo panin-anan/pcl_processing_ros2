@@ -44,14 +44,12 @@ class PCLprocessor(Node):
         self.declare_parameter('cluster_neighbor',          '20'    )   # number of required neighbour points to remove outliers
         self.declare_parameter('laserline_threshold',       '0.00008')  # scan resolution line axis in m
         self.declare_parameter('feedaxis_threshold',        '0.00012')  # scan resolution feed axis in m
-        self.declare_parameter('plate_thickness',           '0.002' )   # in m
         self.declare_parameter('concave_resolution',        '0.0005')   # in m
         self.declare_parameter('filter_down_size',          '0.0002')   # in m
         self.declare_parameter('belt_width_threshold',      '0.8')      # A fraction of the belt width. 0.8 means that the removed volume should have 80% of width of the belt to be considered valid
 
         self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
         self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
-        self.plate_thickness = float(self.get_parameter('plate_thickness').get_parameter_value().string_value) 
         self.plane_error_allowance = float(self.get_parameter('plane_error_allowance').get_parameter_value().string_value)
         self.clusterscan_eps = float(self.get_parameter('clusterscan_eps').get_parameter_value().string_value)
         self.laserline_threshold = float(self.get_parameter('laserline_threshold').get_parameter_value().string_value)
@@ -66,7 +64,7 @@ class PCLprocessor(Node):
 
         pcl1 = self.convert_ros_to_open3d(request.initial_pointcloud)
         pcl2 = self.convert_ros_to_open3d(request.final_pointcloud)
-        self.plate_thickness = request.plate_thickness
+        plate_thickness = request.plate_thickness
 
         #filter point by plane and project onto it
         pcl1, mesh1_pca_basis, mesh1_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
@@ -135,7 +133,7 @@ class PCLprocessor(Node):
             area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)
             self.get_logger().info(f"bbox glob_z: {glob_z * 1000} mm, glob_y: {glob_y * 1000} mm")
             self.get_logger().info(f"bbox area: {area_bb * (1000**2)} mm^2, convex_hull_area:{area * (1000**2)} mm^2, concave_hull_area: {area_concave * (1000**2)} mm^2")
-            lost_volume = area_concave * self.plate_thickness
+            lost_volume = area_concave * plate_thickness
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
             hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
             hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))

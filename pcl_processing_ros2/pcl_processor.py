@@ -112,8 +112,7 @@ class PCLprocessor(Node):
             self.get_logger().info("No detectable difference between point clouds. Lost volume is 0.")
             lost_volume = 0.0
 
-        else: 
-            #area from bounding box
+        else:
             glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
 
             # Adjust cluster settings to allow for detecting smaller removed volumes 
@@ -121,7 +120,18 @@ class PCLprocessor(Node):
                 self.get_logger().info("clustering not appropriate. increasing threshold")
                 changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps*5, min_points=self.cluster_neighbor, remove_outliers=True)
                 glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
+            
+            
+            for multiplier in [1, 2, 5]:
+                # Adjust eps and attempt clustering
+                self.get_logger().info(f"Clustering with eps = {self.clusterscan_eps * multiplier}")
+                changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps * multiplier, min_points=self.cluster_neighbor, remove_outliers=True)
+                # Check if glob_z meets the belt width threshold
+                glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
 
+                if glob_z >= self.belt_width_threshold * request.belt_width:
+                    break  # Exit loop if a valid cluster is found
+            
             # If it is still bad after reclustering, mark as failure 
             if glob_z < self.belt_width_threshold * request.belt_width:
                 response.success = False

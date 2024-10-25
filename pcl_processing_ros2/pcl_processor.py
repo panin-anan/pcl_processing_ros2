@@ -103,7 +103,7 @@ class PCLprocessor(Node):
         changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.feedaxis_threshold, y_threshold=self.laserline_threshold)
         changed_pcl_local_all = changed_pcl_local
         # after sorting
-        changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True)
+        changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True, outlier_eps=self.clusterscan_eps)
 
         # Check if there are any missing points detected
         if changed_pcl_local is None or len(np.asarray(changed_pcl_local.points)) == 0:
@@ -116,7 +116,7 @@ class PCLprocessor(Node):
             for multiplier in [1, 2, 5]:
                 # Adjust eps and attempt clustering
                 self.get_logger().info(f"Clustering with eps = {self.clusterscan_eps * multiplier}")
-                changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps * multiplier, min_points=self.cluster_neighbor, remove_outliers=True)
+                changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps * multiplier, min_points=self.cluster_neighbor, remove_outliers=True, outlier_eps=self.clusterscan_eps)
                 # Check if glob_z meets the belt width threshold
                 glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
 

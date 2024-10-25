@@ -32,12 +32,12 @@ def generate_launch_description():
             'cluster_neighbor':               '20',                # filter outlier with #of neighbour point threshold
             'plate_thickness':                  '2',                # in mm
             'plane_error_allowance':            '5',               # in degree
-            'clusterscan_eps':               '0.0003',              # cluster minimum dist grouping in m
+            'clusterscan_eps':               '0.00025',              # cluster minimum dist grouping in m
             'laserline_threshold':                   '0.00008',      # scan resolution line axis in m
             'feedaxis_threshold':                     '0.00012',     # scan resolution robot feed axis in m
-            'concave_resolution':                      '0.0005',       #concave hull resolution
+            'concave_resolution':                      '0.0006',       #concave hull resolution
             'filter_down_size':                 '0.0002',       #voxel down size on clustering
-            'belt_width_threshold':                    '0.020',           #minimum detect belt width in m 
+            'belt_width_threshold':                    '0.8',           #minimum detect belt width in m 
             }
         ]
     )

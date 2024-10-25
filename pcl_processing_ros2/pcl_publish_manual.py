@@ -42,7 +42,7 @@ class PCLpublisher(Node):
         self.cloud_publish_trigger = Key.KEY_P
         self.global_frame_id = 'base_link'
 
-        self.plate_thickness = 0.002  # Initialize plate thickness in m
+        self.plate_thickness = 0.004  # Initialize plate thickness in m
 
         self.test_index = 0  # Track number of tests
         self.settings = []  # This should hold your test settings/requests
@@ -69,6 +69,7 @@ class PCLpublisher(Node):
                 req.initial_pointcloud  = self.initial_scan
                 req.final_pointcloud    = self.final_scan
                 req.plate_thickness     = self.plate_thickness
+                req.belt_width          = 0.025 #in m
                 volume_call = self.calculate_volume_trigger.call_async(req)
 
                 #prepare for next consecutive set of data

@@ -252,12 +252,12 @@ class PCLfunctions:
         high_res_largest_cluster_pcd = pcd.select_by_index(original_cluster_indices)
 
         # Optionally remove outliers from the largest cluster
-        if remove_outliers and high_res_largest_cluster_pcd is not None:
-            high_res_largest_cluster_pcd, _ = high_res_largest_cluster_pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+        #if remove_outliers and high_res_largest_cluster_pcd is not None:
+        #    high_res_largest_cluster_pcd, _ = high_res_largest_cluster_pcd.remove_radius_outlier(nb_neighbors=5, std_ratio=)
 
         return high_res_largest_cluster_pcd
 
-    def sort_largest_cluster(self, pcd, eps=0.005, min_points=30, remove_outliers=True):
+    def sort_largest_cluster(self, pcd, eps=0.005, min_points=30, remove_outliers=True, outlier_eps=0.0002):
         # Step 1: Segment point cloud into clusters using DBSCAN
         labels = np.array(pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True))
 
@@ -283,8 +283,8 @@ class PCLfunctions:
                 largest_cluster_pcd = pcd.select_by_index(cluster_indices)
 
         # Optionally: Remove outliers (if remove_outliers is set to True)
-        #if remove_outliers and largest_cluster_pcd is not None:
-        #    largest_cluster_pcd, _ = largest_cluster_pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+        if remove_outliers and largest_cluster_pcd is not None:
+           largest_cluster_pcd, _ = largest_cluster_pcd.remove_radius_outlier(nb_points=5, radius=outlier_eps*1.5)
 
         if largest_cluster_pcd is None:
             largest_cluster_pcd = o3d.geometry.PointCloud()

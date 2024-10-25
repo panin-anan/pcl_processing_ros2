@@ -38,16 +38,16 @@ class PCLprocessor(Node):
 
 
     def init_parameters(self) -> None:
-        self.declare_parameter('dist_threshold',                '0.0006')    # filter for plane projection
-        self.declare_parameter('plane_error_allowance',         '5'    )    # in degree
-        self.declare_parameter('clusterscan_eps',               '0.00025')    # size for cluster grouping in DBScan
-        self.declare_parameter('cluster_neighbor',              '20'    )    # number of required neighbour points to remove outliers
-        self.declare_parameter('laserline_threshold',           '0.00008')    # scan resolution line axis in m
-        self.declare_parameter('feedaxis_threshold',            '0.00012')    # scan resolution feed axis in m
-        self.declare_parameter('plate_thickness',               '0.002' )    # in m
-        self.declare_parameter('concave_resolution',            '0.0005')   # in m
-        self.declare_parameter('filter_down_size',              '0.0002')   #   in m
-        self.declare_parameter('belt_width_threshold',          '0.020')    # in m
+        self.declare_parameter('dist_threshold',            '0.0006')   # filter for plane projection
+        self.declare_parameter('plane_error_allowance',     '5'    )    # in degree
+        self.declare_parameter('clusterscan_eps',           '0.00025')  # size for cluster grouping in DBScan
+        self.declare_parameter('cluster_neighbor',          '20'    )   # number of required neighbour points to remove outliers
+        self.declare_parameter('laserline_threshold',       '0.00008')  # scan resolution line axis in m
+        self.declare_parameter('feedaxis_threshold',        '0.00012')  # scan resolution feed axis in m
+        self.declare_parameter('plate_thickness',           '0.002' )   # in m
+        self.declare_parameter('concave_resolution',        '0.0005')   # in m
+        self.declare_parameter('filter_down_size',          '0.0002')   # in m
+        self.declare_parameter('belt_width_threshold',      '0.8')      # A fraction of the belt width. 0.8 means that the removed volume should have 80% of width of the belt to be considered valid
 
         self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
         self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
@@ -117,15 +117,15 @@ class PCLprocessor(Node):
             glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
 
             # Adjust cluster settings to allow for detecting smaller removed volumes 
-            if glob_z < self.belt_width_threshold:
+            if glob_z < self.belt_width_threshold * request.belt_width:
                 self.get_logger().info("clustering not appropriate. increasing threshold")
                 changed_pcl_local = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps*5, min_points=self.cluster_neighbor, remove_outliers=True)
                 glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
 
             # If it is still bad after reclustering, mark as failure 
-            if glob_z < self.belt_width_threshold:
+            if glob_z < self.belt_width_threshold * request.belt_width:
                 response.success = False
-                response.message += f"The removed volume width of {glob_z * 1000} mm is smaller than the belt width threshold {self.belt_width_threshold * 1000} mm. Detecting lost volume failed."
+                response.message += f"The removed volume width of {glob_z * 1000} mm is smaller than the belt width threshold {self.belt_width_threshold * request.belt_width* 1000} mm. Detecting lost volume failed."
             
             #area from convex hull
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)

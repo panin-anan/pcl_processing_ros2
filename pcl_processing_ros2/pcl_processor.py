@@ -26,7 +26,7 @@ class PCLprocessor(Node):
         self.pcl_functions = PCLfunctions()
 
         #Publisher to publish volume lost
-        self.publisher_volume = self.create_publisher(Float32Stamped, '/scanner/volume', 10)
+        # self.publisher_volume = self.create_publisher(Float32Stamped, '/scanner/volume', 10)
         self.publisher_grinded_cloud = self.create_publisher(PointCloud2,'/grinded_cloud', 10)
         self.publisher_hull_lines = self.create_publisher(Marker, '/concave_hull_lines', 10)  # Publisher for concave hull lines
 
@@ -143,8 +143,8 @@ class PCLprocessor(Node):
         changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
 
         # Prepare and publish grinded cloud and volume message
-        msg_stamped = Float32Stamped(data=float(lost_volume) * 1000**3, header=Header(stamp=self.get_clock().now().to_msg()))
-        self.publisher_volume.publish(msg_stamped)
+        # msg_stamped = Float32Stamped(data=float(lost_volume) * 1000**3, header=Header(stamp=self.get_clock().now().to_msg()))
+        # self.publisher_volume.publish(msg_stamped)
 
         diff_pcl_global = self.create_pcl_msg(changed_pcl_global)
         self.publisher_grinded_cloud.publish(diff_pcl_global) 

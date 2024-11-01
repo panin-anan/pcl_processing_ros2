@@ -284,12 +284,15 @@ class PCLfunctions:
 
         # Optionally: Remove outliers (if remove_outliers is set to True)
         if remove_outliers and largest_cluster_pcd is not None:
-           largest_cluster_pcd, _ = largest_cluster_pcd.remove_radius_outlier(nb_points=5, radius=outlier_eps*1.5)
+            before_outrem = len(largest_cluster_pcd.points)
+            largest_cluster_pcd, _ = largest_cluster_pcd.remove_radius_outlier(nb_points=5, radius=outlier_eps*1.5)
+            after_outrem = len(largest_cluster_pcd.points)
+            outliers_removed = before_outrem - after_outrem
 
         if largest_cluster_pcd is None:
             largest_cluster_pcd = o3d.geometry.PointCloud()
 
-        return largest_cluster_pcd
+        return largest_cluster_pcd, outliers_removed
 
     def transform_to_local_pca_coordinates(self, pcd, pca_basis, centroid):
         points = np.asarray(pcd.points)

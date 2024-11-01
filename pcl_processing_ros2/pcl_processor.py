@@ -76,7 +76,7 @@ class PCLprocessor(Node):
 
         # Check if the largest cluster has at least half the points of the original point cloud
         if len(pcl1.points) < len(pcl1_plane.points) / 2:
-            self.get_lgoger().info(f"voxel down algorithm failed. Resorting with original pcl")
+            self.get_logger().info(f"voxel down algorithm failed. Resorting with original pcl")
             pcl1 = self.pcl_functions.sort_plate_cluster(pcl1_plane, eps=0.0005, min_points=30, use_downsampling=False)
             pcl2 = self.pcl_functions.sort_plate_cluster(pcl2_plane, eps=0.0005, min_points=30, use_downsampling=False)
 

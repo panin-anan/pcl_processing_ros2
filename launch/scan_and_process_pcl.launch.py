@@ -9,49 +9,35 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    # Define LaunchConfigurations for each parameter
-    dist_threshold = LaunchConfiguration('dist_threshold')
-    cluster_neighbor = LaunchConfiguration('cluster_neighbor')
-    plane_error_allowance = LaunchConfiguration('plane_error_allowance')
-    clusterscan_eps = LaunchConfiguration('clusterscan_eps')
-    laserline_threshold = LaunchConfiguration('laserline_threshold')
-    feedaxis_threshold = LaunchConfiguration('feedaxis_threshold')
-    concave_resolution = LaunchConfiguration('concave_resolution')
-    filter_down_size = LaunchConfiguration('filter_down_size')
-    belt_width_threshold = LaunchConfiguration('belt_width_threshold')
-
-    # Define the node with parameters passed as LaunchConfigurations
+    pkg = "pcl_processing_ros2"
+    
     combine_cloud_listener = Node(
-        package="pcl_processing_ros2",
+        package=pkg,
         executable="pcl_processor",
-        name='pcl_process',
-        parameters=[{
-            'dist_threshold': dist_threshold,
-            'cluster_neighbor': cluster_neighbor,
-            'plane_error_allowance': plane_error_allowance,
-            'clusterscan_eps': clusterscan_eps,
-            'laserline_threshold': laserline_threshold,
-            'feedaxis_threshold': feedaxis_threshold,
-            'concave_resolution': concave_resolution,
-            'filter_down_size': filter_down_size,
-            'belt_width_threshold': belt_width_threshold,
-        }]
+        name='pcl_process',    # This is the first line in the config file 
+        parameters=[
+            {'dist_threshold':              '0.0006',       # Distance to filter grinded area. do not go near #50-80 micron on line axis, 200 micron on feed axis of rate 30 second
+            'cluster_neighbor':             '20',           # filter outlier with #of neighbour point threshold
+            'plane_error_allowance':        '5',            # degree
+            'clusterscan_eps':              '0.00025',      # cluster minimum dist grouping in m
+            'laserline_threshold':          '0.00008',      # scan resolution line axis in m
+            'feedaxis_threshold':           '0.00012',      # scan resolution robot feed axis in m
+            'concave_resolution':           '0.0005',       # hull resolution
+            'filter_down_size':             '0.0002',       # down size on clustering
+            'belt_width_threshold':         '0.8',          # Fraction of the belt width that is the minimum width threshold for removed volume to be valid 
+            }
+        ]
     )
 
-    # Declare launch arguments with default values for each parameter
-    ld = LaunchDescription([
-        DeclareLaunchArgument('dist_threshold', default_value='0.0006', description='Distance threshold for filtering'),
-        DeclareLaunchArgument('cluster_neighbor', default_value='20', description='Cluster neighbor count threshold'),
-        DeclareLaunchArgument('plane_error_allowance', default_value='5', description='Plane error allowance in degrees'),
-        DeclareLaunchArgument('clusterscan_eps', default_value='0.00025', description='Cluster scan epsilon value'),
-        DeclareLaunchArgument('laserline_threshold', default_value='0.00008', description='Laser line resolution threshold'),
-        DeclareLaunchArgument('feedaxis_threshold', default_value='0.00012', description='Feed axis resolution threshold'),
-        DeclareLaunchArgument('concave_resolution', default_value='0.0005', description='Concave hull resolution'),
-        DeclareLaunchArgument('filter_down_size', default_value='0.0002', description='Downsampling size for clustering'),
-        DeclareLaunchArgument('belt_width_threshold', default_value='0.8', description='Minimum width threshold for valid volume removal'),
-        
-        # Add the node to the launch description
-        combine_cloud_listener
-    ])
+    # UR Trajectory Controller
+    '''
+    trajectory_control = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [os.path.join(get_package_share_directory('ur_trajectory_controller'),'launch','ur_surface_measurement.launch.py')])
+    )
+    '''
+    ld = LaunchDescription()
+    ld.add_action(combine_cloud_listener)
+    #ld.add_action(trajectory_control)
 
     return ld

@@ -282,6 +282,7 @@ class PCLfunctions:
                 max_cluster_size = len(cluster_indices)
                 largest_cluster_pcd = pcd.select_by_index(cluster_indices)
 
+        outliers_removed = 0
         # Optionally: Remove outliers (if remove_outliers is set to True)
         if remove_outliers and largest_cluster_pcd is not None:
             before_outrem = len(largest_cluster_pcd.points)

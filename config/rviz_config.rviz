@@ -229,12 +229,12 @@ Visualization Manager:
       Enabled: true
       Name: Marker
       Namespaces:
-        concave_hull: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
         Filter size: 10
-        History Policy: Keep Last
+        History Policy: Keep All
         Reliability Policy: Reliable
         Value: /concave_hull_lines
       Value: true
@@ -284,25 +284,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 0.032535046339035034
+      Distance: 0.022466031834483147
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.37810054421424866
-        Y: 0.8221859335899353
-        Z: -0.07587525993585587
+        X: 0.38207846879959106
+        Y: 0.8314553499221802
+        Z: -0.09412742406129837
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.3017640709877014
+      Pitch: 0.671764075756073
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.19292455911636353
+      Yaw: 1.0879244804382324
     Saved: ~
 Window Geometry:
   Displays:

@@ -50,6 +50,7 @@ class PCLprocessor(Node):
         self.declare_parameter('depthaxis_threshold',       '0.0001')   # in m
         self.declare_parameter('depthaxis_threshold_plane', '0.0002')   # in m
         self.declare_parameter('nearbyplane_threshold',     '0.0008')   # in m
+        self.declare_parameter('num_slices',                '10')       #slice for volume integration
 
         self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
         self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
@@ -62,7 +63,8 @@ class PCLprocessor(Node):
         self.belt_width_threshold = float(self.get_parameter('belt_width_threshold').get_parameter_value().string_value)
         self.depthaxis_threshold = float(self.get_parameter('depthaxis_threshold').get_parameter_value().string_value)
         self.depthaxis_threshold_plane = float(self.get_parameter('depthaxis_threshold_plane').get_parameter_value().string_value)
-        self.nearby_threshold = float(self.get_parameter('nearby_threshold').get_parameter_value().string_value)
+        self.nearbyplane_threshold = float(self.get_parameter('nearbyplane_threshold').get_parameter_value().string_value)
+        self.num_slices = int(self.get_parameter('num_slices').get_parameter_value().string_value)
 
     def calculate_volume_difference(self, request, response):
         self.get_logger().info("Volume calculation request received...")
@@ -99,6 +101,9 @@ class PCLprocessor(Node):
 
         #generate shift in points TODO remove this for actual test data
         pcl2 = self.pcl_functions.shift_y_fordiagonal(pcl2)
+        pcl2_pub = self.create_pcl_msg(pcl2)
+        self.publisher_grinded_cloud.publish(pcl2_pub) 
+
 
         #transform points to local xy plane
         pcl1_local = self.pcl_functions.transform_to_local_pca_coordinates(pcl1, mesh1_pca_basis, mesh1_plane_centroid )
@@ -131,12 +136,23 @@ class PCLprocessor(Node):
 
         else:
             #area from concave hull
-            lost_volume, hull_concave_2d_cloud = self.pcl_functions.calculate_volume_with_projected_boundaries_concave(changed_pcl1_local, changed_pcl2_local, num_slices=3, concave_resolution=0.002)
+            lost_volume, hull_concave_2d_clouds = self.pcl_functions.calculate_volume_with_projected_boundaries_concave(changed_pcl1_local, changed_pcl2_local, num_slices=self.num_slices, concave_resolution=self.concave_resolution)
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
-            hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
-            hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))
-            self.publisher_hull_lines.publish(hull_lines_msg)
-        
+
+            for i, hull_cloud in enumerate(hull_concave_2d_clouds):
+                hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_cloud, mesh1_pca_basis, mesh1_plane_centroid)
+                hull_points_global = np.asarray(hull_cloud_global.points)
+
+                # Append points to a single marker for each hull cloud
+                if i == 0:  # Initialize marker only once at the beginning
+                    hull_lines_marker = self.create_hull_lines_marker(hull_points_global)
+                else:
+                    # For each new set of hull points, add them to the existing marker
+                    self.add_hull_to_marker(hull_lines_marker, hull_points_global)
+
+            # Publish the accumulated marker with all hull lines
+            self.publisher_hull_lines.publish(hull_lines_marker)
+
         #transform back to global for visualization
         changed_pcl1_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl1_local, mesh1_pca_basis, mesh1_plane_centroid) 
         changed_pcl2_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl2_local, mesh1_pca_basis, mesh1_plane_centroid) 
@@ -212,6 +228,15 @@ class PCLprocessor(Node):
         marker.color.r = 1.0   # Red color
 
         return marker
+
+    def add_hull_to_marker(self, marker, hull_points):
+        """Append additional hull points to an existing Marker message."""
+        start_index = len(marker.points)
+
+        for point in hull_points:
+            p = Point(x=point[0], y=point[1], z=point[2])
+            marker.points.append(p)
+        marker.points.append(marker.points[start_index])
 
 def main(args=None):
     rclpy.init(args=args)

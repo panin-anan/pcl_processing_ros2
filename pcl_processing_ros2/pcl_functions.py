@@ -317,7 +317,7 @@ class PCLfunctions:
 
         return global_pcl
 
-    def filter_points_by_plane_nearbycloud(self, point_cloud, distance_threshold=0.0008, nearby_distance=0.01):
+    def filter_points_by_plane_nearbycloud(self, point_cloud, distance_threshold=0.0008, nearby_threshold=0.01):
         # Fit a plane to the point cloud using RANSAC
         plane_model, inliers = point_cloud.segment_plane(distance_threshold=distance_threshold,
                                                          ransac_n=3,
@@ -326,12 +326,12 @@ class PCLfunctions:
 
         # Select points that are close to the plane (within the threshold)
         inlier_cloud = point_cloud.select_by_index(inliers)
-        pca_basis, plane_centroid = fit_plane_to_pcd_pca(inlier_cloud)
+        pca_basis, plane_centroid = self.fit_plane_to_pcd_pca(inlier_cloud)
         points = np.asarray(inlier_cloud.points)
 
         # Select additional points within the specified nearby distance to the plane
         distances = np.abs(np.dot(np.asarray(point_cloud.points), [a, b, c]) + d) / np.linalg.norm([a, b, c])
-        nearby_indices = np.where(distances <= nearby_distance)[0]
+        nearby_indices = np.where(distances <= nearby_threshold)[0]
         nearby_cloud = point_cloud.select_by_index(nearby_indices)
 
         # Color the inlier points (on the original RANSAC plane) in green
@@ -348,8 +348,8 @@ class PCLfunctions:
         points = np.asarray(pcd.points)
 
         # Define y range for applying the shift
-        min_y = 0.82
-        max_y = min_y + 0.006
+        min_y = 0.816
+        max_y = min_y + 0.009
         max_shift = 0.002
 
         # Calculate shift factor for points within the specified y range
@@ -361,7 +361,7 @@ class PCLfunctions:
 
         return pcd
 
-    def filter_changedpoints_onNormZaxis(self, mesh_before, mesh_after, z_threshold=0.0003, x_threshold=0.0001, z_threshold_after=0.00001, neighbor_threshold=5):
+    def filter_changedpoints_onNormZaxis(self, mesh_before, mesh_after, z_threshold=0.0003, x_threshold=0.0001, z_threshold_after=0.0001, neighbor_threshold=5):
         # Convert points from Open3D mesh to numpy arrays
         points_before = np.asarray(mesh_before.points)
         points_after = np.asarray(mesh_after.points)
@@ -452,7 +452,7 @@ class PCLfunctions:
                 # Compute the concave hull indices
                 idxes = concave_hull_indexes(xz_combined_points[:, [0, 2]], length_threshold=concave_resolution)
                 hull_points = xz_combined_points[idxes]
-                hull_clouds.extend(hull_points)
+
                 # Calculate the area of the concave hull using the Shoelace formula
                 x = hull_points[:, 0]
                 z = hull_points[:, 2]
@@ -461,7 +461,8 @@ class PCLfunctions:
                 # Prepare visualization of Concave Hull in Open3D
                 hull_cloud = o3d.geometry.PointCloud()
                 hull_cloud.points = o3d.utility.Vector3dVector(hull_points)
-                
+                hull_clouds.append(hull_cloud)
+
                 # Create lines to connect hull points in sequence and close the loop
                 hull_lines = [[j, (j + 1) % len(idxes)] for j in range(len(idxes))]
 
@@ -482,8 +483,5 @@ class PCLfunctions:
             # Add the slice volume to the total volume
             total_volume += slice_volume
 
-        combined_hull_cloud = o3d.geometry.PointCloud()
-        combined_hull_cloud.points = o3d.utility.Vector3dVector(np.array(hull_clouds))
-
         # Return the total volume
-        return total_volume, combined_hull_cloud
+        return total_volume, hull_clouds

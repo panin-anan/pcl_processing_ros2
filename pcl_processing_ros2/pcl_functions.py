@@ -316,3 +316,174 @@ class PCLfunctions:
         global_pcl.points = o3d.utility.Vector3dVector(global_points)
 
         return global_pcl
+
+    def filter_points_by_plane_nearbycloud(self, point_cloud, distance_threshold=0.0008, nearby_distance=0.01):
+        # Fit a plane to the point cloud using RANSAC
+        plane_model, inliers = point_cloud.segment_plane(distance_threshold=distance_threshold,
+                                                         ransac_n=3,
+                                                         num_iterations=1000)
+        [a, b, c, d] = plane_model
+
+        # Select points that are close to the plane (within the threshold)
+        inlier_cloud = point_cloud.select_by_index(inliers)
+        pca_basis, plane_centroid = fit_plane_to_pcd_pca(inlier_cloud)
+        points = np.asarray(inlier_cloud.points)
+
+        # Select additional points within the specified nearby distance to the plane
+        distances = np.abs(np.dot(np.asarray(point_cloud.points), [a, b, c]) + d) / np.linalg.norm([a, b, c])
+        nearby_indices = np.where(distances <= nearby_distance)[0]
+        nearby_cloud = point_cloud.select_by_index(nearby_indices)
+
+        # Color the inlier points (on the original RANSAC plane) in green
+        inlier_cloud.paint_uniform_color([0, 1, 0])  # Color inlier points in green
+        nearby_cloud.paint_uniform_color([0, 0, 1])  # Color nearby points in blue
+
+        # Visualize both the inliers, projected points, and nearby points
+        #o3d.visualization.draw_geometries([projected_pcd, inlier_cloud, nearby_cloud])
+
+        return nearby_cloud, pca_basis, plane_centroid
+
+    def shift_y_fordiagonal(self, pcd):
+        # Extract points
+        points = np.asarray(pcd.points)
+
+        # Define y range for applying the shift
+        min_y = 0.82
+        max_y = min_y + 0.006
+        max_shift = 0.002
+
+        # Calculate shift factor for points within the specified y range
+        mask = (points[:, 1] > min_y) & (points[:, 1] <= max_y)
+        points[mask, 0] += max_shift * (points[mask, 1] - min_y) / (max_y - min_y)
+
+        # Update point cloud with modified points
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+        return pcd
+
+    def filter_changedpoints_onNormZaxis(self, mesh_before, mesh_after, z_threshold=0.0003, x_threshold=0.0001, z_threshold_after=0.00001, neighbor_threshold=5):
+        # Convert points from Open3D mesh to numpy arrays
+        points_before = np.asarray(mesh_before.points)
+        points_after = np.asarray(mesh_after.points)
+
+        # Create a KDTree for the points in mesh_after
+        kdtree_after = cKDTree(points_after)
+
+        # Query KDTree to find distances and indices of nearest neighbors in mesh_after for points in mesh_before
+        _, indices = kdtree_after.query(points_before)
+
+        # Get the x and z coordinates from both meshes
+        z_before = points_before[:, 2]
+        x_before = points_before[:, 0]
+        z_after = points_after[indices, 2]  # Nearest neighbors' z-coordinates
+        x_after = points_after[indices, 0]  # Nearest neighbors' x-coordinates
+
+        # Calculate the absolute differences in the x and z coordinates
+        z_diff = np.abs(z_before - z_after)
+        x_diff = np.abs(x_before - x_after)
+
+        # Create a mask to find points in mesh_before where either the x or z axis difference
+        # with the corresponding point in mesh_after exceeds the respective thresholds
+        zx_diff_mask = (z_diff >= z_threshold) | (x_diff >= x_threshold)
+
+        # Select the points from mesh_before where the x or z axis difference is larger than the threshold
+        missing_points = points_before[zx_diff_mask]
+
+        # Create a new point cloud with the points that have significant x or z axis differences
+        mesh_missing = o3d.geometry.PointCloud()
+        mesh_missing.points = o3d.utility.Vector3dVector(missing_points)
+
+        # Now find points in mesh_after that are outside the z_threshold distance from mesh_missing
+        kdtree_missing_z = cKDTree(missing_points[:, [2]])  # KDTree with only z-coordinates
+        distances, _ = kdtree_missing_z.query(points_after[:, [2]])
+
+        # Mask to filter points in mesh_after that are outside the z_threshold distance in z-axis
+        change_mask = distances > z_threshold_after
+        changed_points = points_after[change_mask]
+
+        # Create mesh_change with points in mesh_after that are outside the z-axis threshold distance from mesh_missing
+        mesh_change = o3d.geometry.PointCloud()
+        mesh_change.points = o3d.utility.Vector3dVector(changed_points)
+
+        return mesh_missing, mesh_change
+
+    def calculate_volume_with_projected_boundaries_concave(self, pcd1, pcd2, num_slices=3, concave_resolution=0.002):
+        """
+        Calculate the volume between two irregular surfaces by integrating cross-sectional areas along the y-axis.
+        """
+        points1 = np.asarray(pcd1.points)
+        points2 = np.asarray(pcd2.points)
+
+        # Define full x, y, and z bounds based on the two surfaces
+        x_min = min(points1[:, 0].min(), points2[:, 0].min())
+        x_max = max(points1[:, 0].max(), points2[:, 0].max())
+        y_min = min(points1[:, 1].min(), points2[:, 1].min())
+        y_max = max(points1[:, 1].max(), points2[:, 1].max())
+        z_min = min(points1[:, 2].min(), points2[:, 2].min())
+        z_max = max(points1[:, 2].max(), points2[:, 2].max())
+
+        # Calculate the area of the xz-plane bounding box
+        bounding_area_xz = (x_max - x_min) * (z_max - z_min)
+
+        # Define y-axis slices
+        y_slices = np.linspace(y_min, y_max, num_slices)
+        total_volume = 0
+        hull_clouds = []
+
+        for i in range(len(y_slices) - 1):
+            y_start, y_end = y_slices[i], y_slices[i + 1]
+            slice_thickness = y_end - y_start
+            y_mid = (y_start + y_end) / 2
+
+            # Filter points within the current y-slice for each surface
+            slice_points1 = points1[(points1[:, 1] >= y_start) & (points1[:, 1] < y_end)]
+            slice_points2 = points2[(points2[:, 1] >= y_start) & (points2[:, 1] < y_end)]
+
+            # Combine points from both surfaces for this slice
+            combined_slice_points = np.vstack((slice_points1, slice_points2))
+
+            if len(combined_slice_points) >= 3:
+                # Project combined points onto the xz-plane at y_mid
+                xz_combined_points = np.column_stack((combined_slice_points[:, 0], np.full(combined_slice_points.shape[0], y_mid), combined_slice_points[:, 2]))
+                xz_points_display = o3d.geometry.PointCloud()
+                xz_points_display.points = o3d.utility.Vector3dVector(xz_combined_points)
+
+
+                # Compute the concave hull indices
+                idxes = concave_hull_indexes(xz_combined_points[:, [0, 2]], length_threshold=concave_resolution)
+                hull_points = xz_combined_points[idxes]
+                hull_clouds.extend(hull_points)
+                # Calculate the area of the concave hull using the Shoelace formula
+                x = hull_points[:, 0]
+                z = hull_points[:, 2]
+                cross_sectional_area = 0.5 * np.abs(np.dot(x, np.roll(z, 1)) - np.dot(z, np.roll(x, 1)))
+
+                # Prepare visualization of Concave Hull in Open3D
+                hull_cloud = o3d.geometry.PointCloud()
+                hull_cloud.points = o3d.utility.Vector3dVector(hull_points)
+                
+                # Create lines to connect hull points in sequence and close the loop
+                hull_lines = [[j, (j + 1) % len(idxes)] for j in range(len(idxes))]
+
+                hull_line_set = o3d.geometry.LineSet()
+                hull_line_set.points = hull_cloud.points
+                hull_line_set.lines = o3d.utility.Vector2iVector(hull_lines)
+
+                # Display the concave hull with Open3D
+                #o3d.visualization.draw_geometries([xz_points_display, hull_line_set], window_name=f"Slice {i+1} (y_mid = {y_mid:.2f})")
+
+            else:
+                # Use the bounding area if there are insufficient points to form a polygon
+                cross_sectional_area = bounding_area_xz
+
+            # Estimate volume for this slice
+            slice_volume = cross_sectional_area * slice_thickness
+
+            # Add the slice volume to the total volume
+            total_volume += slice_volume
+
+        combined_hull_cloud = o3d.geometry.PointCloud()
+        combined_hull_cloud.points = o3d.utility.Vector3dVector(np.array(hull_clouds))
+
+        # Return the total volume
+        return total_volume, combined_hull_cloud

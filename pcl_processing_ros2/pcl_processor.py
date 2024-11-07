@@ -42,11 +42,14 @@ class PCLprocessor(Node):
         self.declare_parameter('plane_error_allowance',     '5'    )    # in degree
         self.declare_parameter('clusterscan_eps',           '0.00025')  # size for cluster grouping in DBScan
         self.declare_parameter('cluster_neighbor',          '20'    )   # number of required neighbour points to remove outliers
-        self.declare_parameter('laserline_threshold',       '0.00008')  # scan resolution line axis in m
+        self.declare_parameter('laserline_threshold',       '0.0002')  # scan resolution line axis in m
         self.declare_parameter('feedaxis_threshold',        '0.00012')  # scan resolution feed axis in m
-        self.declare_parameter('concave_resolution',        '0.0005')   # in m
+        self.declare_parameter('concave_resolution',        '0.002')    # in m
         self.declare_parameter('filter_down_size',          '0.0002')   # in m
         self.declare_parameter('belt_width_threshold',      '0.8')      # A fraction of the belt width. 0.8 means that the removed volume should have 80% of width of the belt to be considered valid
+        self.declare_parameter('depthaxis_threshold',       '0.0001')   # in m
+        self.declare_parameter('depthaxis_threshold_plane', '0.0002')   # in m
+        self.declare_parameter('nearbyplane_threshold',     '0.0008')   # in m
 
         self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
         self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
@@ -57,6 +60,9 @@ class PCLprocessor(Node):
         self.concave_resolution = float(self.get_parameter('concave_resolution').get_parameter_value().string_value)
         self.filter_down_size = float(self.get_parameter('filter_down_size').get_parameter_value().string_value)
         self.belt_width_threshold = float(self.get_parameter('belt_width_threshold').get_parameter_value().string_value)
+        self.depthaxis_threshold = float(self.get_parameter('depthaxis_threshold').get_parameter_value().string_value)
+        self.depthaxis_threshold_plane = float(self.get_parameter('depthaxis_threshold_plane').get_parameter_value().string_value)
+        self.nearby_threshold = float(self.get_parameter('nearby_threshold').get_parameter_value().string_value)
 
     def calculate_volume_difference(self, request, response):
         self.get_logger().info("Volume calculation request received...")
@@ -67,8 +73,8 @@ class PCLprocessor(Node):
         plate_thickness = request.plate_thickness
 
         #filter point by plane and project onto it
-        pcl1, mesh1_pca_basis, mesh1_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl1, distance_threshold=self.dist_threshold)
-        pcl2, mesh2_pca_basis, mesh2_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl2, distance_threshold=self.dist_threshold)
+        pcl1, mesh1_pca_basis, mesh1_plane_centroid = self.pcl_functions.filter_points_by_plane_nearbycloud(pcl1, distance_threshold=self.dist_threshold, nearby_threshold=self.nearbyplane_threshold)
+        pcl2, mesh2_pca_basis, mesh2_plane_centroid = self.pcl_functions.filter_points_by_plane_nearbycloud(pcl2, distance_threshold=self.dist_threshold, nearby_threshold=self.nearbyplane_threshold)
         pcl1_plane = pcl1
         pcl2_plane = pcl2
         pcl1 = self.pcl_functions.sort_plate_cluster(pcl1_plane, eps=0.001, min_points=30, use_downsampling=True, downsample_voxel_size=self.filter_down_size)
@@ -91,8 +97,8 @@ class PCLprocessor(Node):
             response.message += "Plane normals differ too much: {angle} degrees. Something may have moved in between recording the two pointclouds, or the wrong plane was detected for one or more of the pointclouds."
             return response 
 
-        projected_points_mesh2 = self.pcl_functions.project_points_onto_plane(np.asarray(pcl2.points), mesh1_pca_basis[2], mesh1_plane_centroid)
-        pcl2.points = o3d.utility.Vector3dVector(projected_points_mesh2)
+        #generate shift in points TODO remove this for actual test data
+        pcl2 = self.pcl_functions.shift_y_fordiagonal(pcl2)
 
         #transform points to local xy plane
         pcl1_local = self.pcl_functions.transform_to_local_pca_coordinates(pcl1, mesh1_pca_basis, mesh1_plane_centroid )
@@ -100,59 +106,52 @@ class PCLprocessor(Node):
 
 
         self.get_logger().info('Filtering for changes in pcl')
-        changed_pcl_local = self.pcl_functions.filter_missing_points_by_xy(pcl1_local, pcl2_local, x_threshold=self.feedaxis_threshold, y_threshold=self.laserline_threshold)
-        changed_pcl_local_all = changed_pcl_local
+        changed_pcl1_local, changed_pcl2_local = self.pcl_functions.filter_changedpoints_onNormZaxis(
+            pcl1_local, pcl2_local, 
+            z_threshold=self.depthaxis_threshold_plane, 
+            x_threshold=self.laserline_threshold, 
+            z_threshold_after=self.depthaxis_threshold, 
+            neighbor_threshold=5
+        )
+        
+        changed_pcl1_local_all = changed_pcl1_local
+        changed_pcl2_local_all = changed_pcl2_local
         # after sorting
-        changed_pcl_local, outliers_removed = self.pcl_functions.sort_largest_cluster(changed_pcl_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True, outlier_eps=self.clusterscan_eps)
-        self.get_logger().info(f"Initial clustering: {outliers_removed} points removed out of {len(changed_pcl_local.points)}")
+        changed_pcl1_local, outliers_removed1 = self.pcl_functions.sort_largest_cluster(changed_pcl1_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True, outlier_eps=self.clusterscan_eps)
+        changed_pcl2_local, outliers_removed2 = self.pcl_functions.sort_largest_cluster(changed_pcl2_local, eps=self.clusterscan_eps, min_points=self.cluster_neighbor, remove_outliers=True, outlier_eps=self.clusterscan_eps)
+        
+        self.get_logger().info(f"Initial clustering 1: {outliers_removed1} points removed out of {len(changed_pcl1_local.points)}")
+        self.get_logger().info(f"Initial clustering 2: {outliers_removed2} points removed out of {len(changed_pcl2_local.points)}")
+
 
         # Check if there are any missing points detected
-        if changed_pcl_local is None or len(np.asarray(changed_pcl_local.points)) == 0:
+        if changed_pcl1_local is None or changed_pcl2_local is None or len(np.asarray(changed_pcl1_local.points)) == 0:
             self.get_logger().info("No detectable difference between point clouds. Lost volume is 0.")
             lost_volume = 0.0
 
         else:
-            glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
-            
-            for multiplier in [1, 2, 5]:
-                # Adjust eps and attempt clustering
-                self.get_logger().info(f"Clustering with eps = {self.clusterscan_eps * multiplier}")
-                changed_pcl_local, outliers_removed  = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps * multiplier, min_points=self.cluster_neighbor, remove_outliers=True, outlier_eps=self.clusterscan_eps)
-                self.get_logger().info(f"{outliers_removed} points removed out of {len(changed_pcl_local.points)}")
-                # Check if glob_z meets the belt width threshold
-                glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
-
-                if glob_z >= self.belt_width_threshold * request.belt_width:
-                    break  # Exit loop if a valid cluster is found
-            
-            # If it is still bad after reclustering, mark as failure 
-            if glob_z < self.belt_width_threshold * request.belt_width:
-                response.success = False
-                response.message += f"The removed volume width of {glob_z * 1000} mm is smaller than the belt width threshold {self.belt_width_threshold * request.belt_width* 1000} mm. Detecting lost volume failed."
-            
-            #area from convex hull
-            area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
-            area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)
-            self.get_logger().info(f"bbox glob_z: {glob_z * 1000} mm, glob_y: {glob_y * 1000} mm")
-            self.get_logger().info(f"bbox area: {area_bb * (1000**2)} mm^2, convex_hull_area:{area * (1000**2)} mm^2, concave_hull_area: {area_concave * (1000**2)} mm^2")
-            lost_volume = area_concave * plate_thickness
+            #area from concave hull
+            lost_volume, hull_concave_2d_cloud = self.pcl_functions.calculate_volume_with_projected_boundaries_concave(changed_pcl1_local, changed_pcl2_local, num_slices=3, concave_resolution=0.002)
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
             hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
             hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))
             self.publisher_hull_lines.publish(hull_lines_msg)
         
         #transform back to global for visualization
-        changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
+        changed_pcl1_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl1_local, mesh1_pca_basis, mesh1_plane_centroid) 
+        changed_pcl2_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl2_local, mesh1_pca_basis, mesh1_plane_centroid) 
 
         # Prepare and publish grinded cloud and volume message
         # msg_stamped = Float32Stamped(data=float(lost_volume) * 1000**3, header=Header(stamp=self.get_clock().now().to_msg()))
         # self.publisher_volume.publish(msg_stamped)
 
-        diff_pcl_global = self.create_pcl_msg(changed_pcl_global)
-        self.publisher_grinded_cloud.publish(diff_pcl_global) 
+        diff_pcl1_global = self.create_pcl_msg(changed_pcl1_global)
+        diff_pcl2_global = self.create_pcl_msg(changed_pcl2_global)
+        self.publisher_grinded_cloud.publish(diff_pcl1_global)
+        self.publisher_grinded_cloud.publish(diff_pcl2_global) 
 
         response.volume_difference = lost_volume
-        response.difference_pointcloud = diff_pcl_global
+        response.difference_pointcloud = diff_pcl1_global
         return response 
 
     def create_pcl_msg(self, o3d_pcl):

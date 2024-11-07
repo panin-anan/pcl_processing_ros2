@@ -38,6 +38,9 @@ def generate_launch_description():
             'concave_resolution':                      '0.0006',       #concave hull resolution
             'filter_down_size':                 '0.0002',       #voxel down size on clustering
             'belt_width_threshold':                    '0.8',           #minimum detect belt width in m 
+            'depthaxis_threshold':              '0.0001',       #in m
+            'depthaxis_threshold_plane':        '0.0002',       #in m
+            'nearbyplane_threshold':            '0.0008',       #in m
             }
         ]
     )

@@ -24,7 +24,7 @@ def generate_launch_description():
             'feedaxis_threshold':           '0.00012',      # scan resolution robot feed axis in m
             'concave_resolution':           '0.0005',       # hull resolution
             'filter_down_size':             '0.0002',       # down size on clustering
-            'belt_width_threshold':         '0.8',          # Fraction of the belt width that is the minimum width threshold for removed volume to be valid 
+            'scan_width_threshold':         '0.7',          # Fraction of the scan width that is the minimum width threshold for removed volume to be valid 
             }
         ]
     )

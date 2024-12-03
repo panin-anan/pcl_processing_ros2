@@ -46,7 +46,7 @@ class PCLprocessor(Node):
         self.declare_parameter('feedaxis_threshold',        '0.00012')  # scan resolution feed axis in m
         self.declare_parameter('concave_resolution',        '0.0005')   # in m
         self.declare_parameter('filter_down_size',          '0.0002')   # in m
-        self.declare_parameter('belt_width_threshold',      '0.8')      # A fraction of the belt width. 0.8 means that the removed volume should have 80% of width of the belt to be considered valid
+        self.declare_parameter('scan_width_threshold',      '0.8')      # A fraction of the belt width. 0.8 means that the removed volume should have 80% of width of the belt to be considered valid
 
         self.dist_threshold = float(self.get_parameter('dist_threshold').get_parameter_value().string_value)
         self.cluster_neighbor = int(self.get_parameter('cluster_neighbor').get_parameter_value().string_value) 
@@ -56,7 +56,7 @@ class PCLprocessor(Node):
         self.feedaxis_threshold = float(self.get_parameter('feedaxis_threshold').get_parameter_value().string_value)
         self.concave_resolution = float(self.get_parameter('concave_resolution').get_parameter_value().string_value)
         self.filter_down_size = float(self.get_parameter('filter_down_size').get_parameter_value().string_value)
-        self.belt_width_threshold = float(self.get_parameter('belt_width_threshold').get_parameter_value().string_value)
+        self.scan_width_threshold = float(self.get_parameter('scan_width_threshold').get_parameter_value().string_value)
 
     def calculate_volume_difference(self, request, response):
         self.get_logger().info("Volume calculation request received...")
@@ -122,13 +122,13 @@ class PCLprocessor(Node):
                 # Check if glob_z meets the belt width threshold
                 glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
 
-                if glob_z >= self.belt_width_threshold * request.belt_width:
+                if glob_z >= self.scan_width_threshold * request.pass_length:
                     break  # Exit loop if a valid cluster is found
             
             # If it is still bad after reclustering, mark as failure 
-            if glob_z < self.belt_width_threshold * request.belt_width:
+            if glob_z < self.scan_width_threshold * request.pass_length:
                 response.success = False
-                response.message += f"The removed volume width of {glob_z * 1000} mm is smaller than the belt width threshold {self.belt_width_threshold * request.belt_width* 1000} mm. Detecting lost volume failed."
+                response.message += f"The removed volume width of {glob_z * 1000} mm is smaller than the belt width threshold {self.scan_width_threshold * request.pass_length* 1000} mm. Detecting lost volume failed."
             
             #area from convex hull
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)

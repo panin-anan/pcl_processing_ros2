@@ -37,7 +37,7 @@ def generate_launch_description():
             'feedaxis_threshold':                     '0.00012',     # scan resolution robot feed axis in m
             'concave_resolution':                      '0.0006',       #concave hull resolution
             'filter_down_size':                 '0.0002',       #voxel down size on clustering
-            'belt_width_threshold':                    '0.8',           #minimum detect belt width in m 
+            'scan_width_threshold':                    '0.9',           #minimum detect belt width in m 
             }
         ]
     )

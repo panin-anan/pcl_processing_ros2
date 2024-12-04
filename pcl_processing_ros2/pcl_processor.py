@@ -71,16 +71,18 @@ class PCLprocessor(Node):
         pcl2, mesh2_pca_basis, mesh2_plane_centroid = self.pcl_functions.filter_project_points_by_plane(pcl2, distance_threshold=self.dist_threshold)
         pcl1_plane = pcl1
         pcl2_plane = pcl2
-        pcl1 = self.pcl_functions.sort_plate_cluster(pcl1_plane, eps=0.001, min_points=30, use_downsampling=True, downsample_voxel_size=self.filter_down_size)
-        pcl2 = self.pcl_functions.sort_plate_cluster(pcl2_plane, eps=0.001, min_points=30, use_downsampling=True, downsample_voxel_size=self.filter_down_size)
+        pcl1 = self.pcl_functions.sort_plate_cluster(pcl1_plane, eps=0.0015, min_points=50, use_downsampling=True, downsample_voxel_size=self.filter_down_size)
+        pcl2 = self.pcl_functions.sort_plate_cluster(pcl2_plane, eps=0.0015, min_points=50, use_downsampling=True, downsample_voxel_size=self.filter_down_size)
 
         # Check if the largest cluster has at least half the points of the original point cloud
         if len(pcl1.points) < len(pcl1_plane.points) / 2:
             self.get_logger().info(f"voxel down algorithm failed. Resorting with original pcl")
-            pcl1 = self.pcl_functions.sort_plate_cluster(pcl1_plane, eps=0.0005, min_points=30, use_downsampling=False)
-            pcl2 = self.pcl_functions.sort_plate_cluster(pcl2_plane, eps=0.0005, min_points=30, use_downsampling=False)
+            pcl1 = self.pcl_functions.sort_plate_cluster(pcl1_plane, eps=0.001, min_points=50, use_downsampling=False)
+            pcl2 = self.pcl_functions.sort_plate_cluster(pcl2_plane, eps=0.001, min_points=50, use_downsampling=False)
 
         self.get_logger().info('PCL Projected on plane')
+        #pcl1_debug = self.create_pcl_msg(pcl1)
+        #self.publisher_grinded_cloud.publish(pcl1_debug)
 
         # Check alignment
         cos_angle = np.dot(mesh1_pca_basis[2], mesh2_pca_basis[2]) / (np.linalg.norm(mesh1_pca_basis[2]) * np.linalg.norm(mesh2_pca_basis[2]))
@@ -113,7 +115,7 @@ class PCLprocessor(Node):
 
         else:
             glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
-            
+            self.get_logger().info(f"request pass length: {request.pass_length} and width {request.belt_width}")
             for multiplier in [1, 2, 5]:
                 # Adjust eps and attempt clustering
                 self.get_logger().info(f"Clustering with eps = {self.clusterscan_eps * multiplier}")

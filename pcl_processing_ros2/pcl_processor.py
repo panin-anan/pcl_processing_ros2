@@ -114,7 +114,7 @@ class PCLprocessor(Node):
             lost_volume = 0.0
 
         else:
-            glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
+            glob_y, glob_z, area_bb, final_rotation_matrix = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
             self.get_logger().info(f"request pass length: {request.pass_length} and width {request.belt_width}")
             for multiplier in [1, 2, 5]:
                 # Adjust eps and attempt clustering
@@ -122,7 +122,7 @@ class PCLprocessor(Node):
                 changed_pcl_local, outliers_removed  = self.pcl_functions.sort_largest_cluster(changed_pcl_local_all, eps=self.clusterscan_eps * multiplier, min_points=self.cluster_neighbor, remove_outliers=True, outlier_eps=self.clusterscan_eps)
                 self.get_logger().info(f"{outliers_removed} points removed out of {len(changed_pcl_local.points)}")
                 # Check if glob_z meets the belt width threshold
-                glob_y, glob_z, area_bb = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
+                glob_y, glob_z, area_bb, final_rotation_matrix = self.pcl_functions.create_bbox_from_pcl_axis_aligned(changed_pcl_local)
 
                 if glob_z >= self.scan_width_threshold * request.pass_length:
                     break  # Exit loop if a valid cluster is found
@@ -139,21 +139,37 @@ class PCLprocessor(Node):
             self.get_logger().info(f"bbox area: {area_bb * (1000**2)} mm^2, convex_hull_area:{area * (1000**2)} mm^2, concave_hull_area: {area_concave * (1000**2)} mm^2")
             lost_volume = area_concave * plate_thickness
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
+            #hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
+            #hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))
+            #self.publisher_hull_lines.publish(hull_lines_msg)
+
+            #Middle area processing
+            mid_changed_pcl_local, mid_point_width = self.pcl_functions.section_mid_pointcloud(changed_pcl_local, final_rotation_matrix, request.belt_width)
+            area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(mid_changed_pcl_local)
+            area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(mid_changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)
+            self.get_logger().info(f"mid_concave_hull_area: {area_concave * (1000**2)} mm^2")
+            mid_lost_volume = area_concave * plate_thickness
+            self.get_logger().info(f"Mid_Lost Volume: {mid_lost_volume * (1000**3)} mm^3, middle width: {mid_point_width}")
             hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
             hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))
             self.publisher_hull_lines.publish(hull_lines_msg)
+
         
         #transform back to global for visualization
         changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
+        mid_changed_pcl_global = self.pcl_functions.transform_to_global_coordinates(mid_changed_pcl_local, mesh1_pca_basis, mesh1_plane_centroid) 
 
         # Prepare and publish grinded cloud and volume message
         # msg_stamped = Float32Stamped(data=float(lost_volume) * 1000**3, header=Header(stamp=self.get_clock().now().to_msg()))
         # self.publisher_volume.publish(msg_stamped)
 
         diff_pcl_global = self.create_pcl_msg(changed_pcl_global)
-        self.publisher_grinded_cloud.publish(diff_pcl_global) 
+        diff_pcl_global_mid = self.create_pcl_msg(mid_changed_pcl_global)
+        self.publisher_grinded_cloud.publish(diff_pcl_global)
+        self.publisher_grinded_cloud.publish(diff_pcl_global_mid) 
 
         response.volume_difference = lost_volume
+        response.volume_difference_mid = mid_lost_volume
         response.difference_pointcloud = diff_pcl_global
         return response 
 

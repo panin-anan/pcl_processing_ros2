@@ -160,14 +160,43 @@ class PCLfunctions:
                 best_angle = angle
     
         final_rotation_matrix = np.array([
-            [np.cos(best_angle), -np.sin(best_angle), 0],
-            [np.sin(best_angle), np.cos(best_angle), 0],
-            [0, 0, 1]
+            [np.cos(best_angle), -np.sin(best_angle)],
+            [np.sin(best_angle), np.cos(best_angle)]
         ])
 
         area = min_glob_z * min_glob_y
 
-        return min_glob_z, min_glob_y, area
+        return min_glob_z, min_glob_y, area, final_rotation_matrix
+
+    def section_mid_pointcloud(self, pcl, final_rotation_matrix, belt_width):
+        points = np.asarray(pcl.points)
+
+        # Transform the points into the rotated 2D space (XY plane)
+        xy_points = points[:, 0:2]  # Take X and Y coordinates
+        rotated_points = np.dot(xy_points, final_rotation_matrix.T)
+
+        # Get min and max bounds of the rotated points
+        min_bound = np.min(rotated_points, axis=0)
+        max_bound = np.max(rotated_points, axis=0)
+
+        # Calculate mid-point in the rotated space
+        mid_point_x_rot = (max_bound[0] + min_bound[0]) / 2  # Along the rotated X-axis
+        mid_point_y_rot = (max_bound[1] + min_bound[1]) / 2  # Along the rotated Y-axis
+
+        # Define bounds in the rotated Y-axis (perpendicular to belt direction)
+        offset_belt_width = belt_width / 2
+        upper_y_rot = mid_point_y_rot + offset_belt_width
+        lower_y_rot = mid_point_y_rot - offset_belt_width
+
+        # Filter points based on the rotated Y-axis bounds
+        mask = (rotated_points[:, 1] >= lower_y_rot) & (rotated_points[:, 1] <= upper_y_rot)
+        filtered_points = points[mask]  # Map back to the original 3D coordinates
+        mid_point_width = upper_y_rot - lower_y_rot
+        # Create a new point cloud with filtered points
+        mid_changed_pcl = o3d.geometry.PointCloud()
+        mid_changed_pcl.points = o3d.utility.Vector3dVector(filtered_points)
+
+        return mid_changed_pcl, mid_point_width
 
     def compute_convex_hull_area_xy(self, point_cloud):
         # Step 1: Convert point cloud to numpy array

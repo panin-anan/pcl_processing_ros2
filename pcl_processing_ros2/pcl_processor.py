@@ -29,7 +29,7 @@ class PCLprocessor(Node):
         # self.publisher_volume = self.create_publisher(Float32Stamped, '/scanner/volume', 10)
         self.publisher_grinded_cloud = self.create_publisher(PointCloud2,'/grinded_cloud', 10)
         self.publisher_hull_lines = self.create_publisher(Marker, '/concave_hull_lines', 10)  # Publisher for concave hull lines
-
+        self.publisher_hull_lines_whole = self.create_publisher(Marker, '/concave_hull_lines_whole', 10)  # Publisher for concave hull lines total area
         self.volume_calculation_server = self.create_service(RequestPCLVolumeDiff, 'calculate_volume_lost', self.calculate_volume_difference, callback_group=MutuallyExclusiveCallbackGroup())
 
         #PCL Collector
@@ -132,18 +132,18 @@ class PCLprocessor(Node):
                 response.success = False
                 response.message += f"The removed volume width of {glob_z * 1000} mm is smaller than the belt width threshold {self.scan_width_threshold * request.pass_length* 1000} mm. Detecting lost volume failed."
             
-            #area from convex hull
+            #area from convex hull entire point cloud
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(changed_pcl_local)
             area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)
             self.get_logger().info(f"bbox glob_z: {glob_z * 1000} mm, glob_y: {glob_y * 1000} mm")
             self.get_logger().info(f"bbox area: {area_bb * (1000**2)} mm^2, convex_hull_area:{area * (1000**2)} mm^2, concave_hull_area: {area_concave * (1000**2)} mm^2")
             lost_volume = area_concave * plate_thickness
             self.get_logger().info(f"Lost Volume: {lost_volume * (1000**3)} mm^3")
-            #hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
-            #hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))
-            #self.publisher_hull_lines.publish(hull_lines_msg)
+            hull_cloud_global = self.pcl_functions.transform_to_global_coordinates(hull_concave_2d_cloud, mesh1_pca_basis, mesh1_plane_centroid)
+            hull_lines_msg = self.create_hull_lines_marker(np.asarray(hull_cloud_global.points))
+            self.publisher_hull_lines_whole.publish(hull_lines_msg)
 
-            #Middle area processing
+            #Middle section area processing
             mid_changed_pcl_local, mid_point_width = self.pcl_functions.section_mid_pointcloud(changed_pcl_local, final_rotation_matrix, request.belt_width)
             area, hull_convex_2d = self.pcl_functions.compute_convex_hull_area_xy(mid_changed_pcl_local)
             area_concave, hull_concave_2d_cloud = self.pcl_functions.compute_concave_hull_area_xy(mid_changed_pcl_local, hull_convex_2d, concave_resolution= self.concave_resolution)
@@ -226,7 +226,7 @@ class PCLprocessor(Node):
         marker.points.append(marker.points[0])
 
         # Set line width and color
-        marker.scale.x = 0.00005  # Line width
+        marker.scale.x = 0.0001  # Line width
         marker.color.a = 1.0   # Alpha (transparency)
         marker.color.r = 1.0   # Red color
 

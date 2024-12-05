@@ -169,6 +169,7 @@ class PCLfunctions:
         return min_glob_z, min_glob_y, area, final_rotation_matrix
 
     def section_mid_pointcloud(self, pcl, final_rotation_matrix, belt_width):
+        #TODO Could have merged with axis aligned bbox function but, meh no time
         points = np.asarray(pcl.points)
 
         # Transform the points into the rotated 2D space (XY plane)

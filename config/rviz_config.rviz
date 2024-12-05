@@ -13,6 +13,8 @@ Panels:
         - /PointCloud24
         - /Marker1
         - /Marker1/Topic1
+        - /Marker2
+        - /Marker2/Topic1
       Splitter Ratio: 0.5
     Tree Height: 784
   - Class: rviz_common/Selection
@@ -229,14 +231,27 @@ Visualization Manager:
       Enabled: true
       Name: Marker
       Namespaces:
-        concave_hull: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
         Filter size: 10
-        History Policy: Keep Last
+        History Policy: Keep All
         Reliability Policy: Reliable
         Value: /concave_hull_lines
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Marker
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep All
+        Reliability Policy: Reliable
+        Value: /concave_hull_lines_whole
       Value: true
   Enabled: true
   Global Options:
@@ -284,7 +299,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 0.032535046339035034
+      Distance: 0.16660770773887634
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

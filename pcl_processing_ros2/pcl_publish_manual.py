@@ -42,7 +42,7 @@ class PCLpublisher(Node):
         self.cloud_publish_trigger = Key.KEY_P
         self.global_frame_id = 'base_link'
 
-        self.plate_thickness = 0.004  # Initialize plate thickness in m
+        self.plate_thickness = 0.002  # Initialize plate thickness in m
 
         self.test_index = 0  # Track number of tests
         self.settings = []  # This should hold your test settings/requests

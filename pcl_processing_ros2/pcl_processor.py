@@ -165,7 +165,7 @@ class PCLprocessor(Node):
 
         diff_pcl_global = self.create_pcl_msg(changed_pcl_global)
         diff_pcl_global_mid = self.create_pcl_msg(mid_changed_pcl_global)
-        self.publisher_grinded_cloud.publish(diff_pcl_global)
+        #self.publisher_grinded_cloud.publish(diff_pcl_global)
         self.publisher_grinded_cloud.publish(diff_pcl_global_mid) 
 
         response.volume_difference = lost_volume

@@ -20,7 +20,7 @@ pip install open3d==0.18.0
 pip install numpy==1.24.0
 pip install scikit-learn==1.5.1
 pip install scipy==1.8.0
-pip install git+https://github.com/panin-ananwa/concave_hull.git
+pip install git+https://github.com/panin-anan/concave_hull.git
 
 sudo apt-get update
 sudo apt install ros-humble-rosbag2-storage-mcap

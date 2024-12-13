@@ -1,7 +1,7 @@
 # SAMXL_pointcloud_area_detection
 
 ## Overview
-Code to perform volume loss calculation between two point clouds: from before grinding and from after grinding, scanned by laser line scanner.
+This repository performs volume loss calculation between two point clouds: from before grinding and from after grinding, scanned by laser line scanner.
 The node works in conjuction with `data_gathering` repositories from `git@github.com:Luka140/data_gathering.git`.
 
 ## Installation
@@ -18,7 +18,7 @@ The node works in conjuction with `data_gathering` repositories from `git@github
 pip install pyads
 pip install open3d==0.18.0
 pip install numpy==1.24.0
-pip install scikit-learn==1.5.1
+pip install scikit-learn==1.5.2
 pip install scipy==1.8.0
 pip install git+https://github.com/panin-anan/concave_hull.git
 
@@ -27,12 +27,15 @@ sudo apt install ros-humble-rosbag2-storage-mcap
 ```
 
 #### Building
-To build from source, clone the latest version from this repository into your workspace along with the following repositories:
+Note: This README shows the bare minimum to use the manual_publish_and_process_pcl.launch.py launch file. 
+To use this repository its full capability, navigate to `git@github.com:Luka140/data_gathering.git` and follow its README install all necessary repositories
+
+To build from source, clone the latest version from this repository into your workspace along with the following required repositories:
 - `data_gathering_msgs` : Server for the Service RequestPCLVolumeDiff
 
 ```bash
 git clone git@github.com:Luka140/data_gathering_msgs.git
-git clone git@github.com:panin-ananwa/pcl_processing_ros2.git
+git clone git@github.com:panin-anan/pcl_processing_ros2.git
 
 ```
 and compile the packages:
@@ -42,12 +45,22 @@ colcon build --symlink-install
 install/setup.bash
 ```
 
+## Launch files
+This repository contains two launch files. Both require similar launch parameters which is explained in the Nodes section. 
+
+### scan_and_process_pcl.launch.py
+only launch pcl_processing node which waits for a ROS2 service request to the service `RequestPCLVolumeDiff` before performing volume detection using the request message.
+
+### manual_publish_and_process.launch.py
+Launch three nodes: pcl_processing, pcl_publish_manual, and rviz.
+The `pcl_publish_manual` node waits for manual keyboard input to publish pointcloud onto the Service Request and, when two pointclouds are manually published, initiate the volume detection by `pcl_processing` node.
+
 
 ## Nodes
 ### pcl_processing
 A node that automates the volume loss calculation process. The node is a service server which waits for the Service Request, `RequestPCLVolumeDiff`, before 
-the node computes the volume loss from the latest two point clouds stored in a service client. The client is created either in `test_coordinator` node from `data_gathering` package 
-or in `pcl_publush_manual` node for manual volume loss calculation.
+the node computes the volume loss from the latest two point clouds stored in a service client. This service client is created either in `test_coordinator` node from `data_gathering` package 
+or in `pcl_publush_manual` node for manual volume loss calculation, according to the launch file used.
 
 The volume loss is calculated from the point cloud difference between two point clouds, clouds from before and after grinding, using the following process:
 Note: For now, the algorithm is only applicable to flat plate
@@ -80,7 +93,7 @@ Services:
 
 
 ### pcl_publish_manual
-A node that can be used to manually publish saved point cloud to pcl_processing, in order to manually evaluate tested data/point clouds.
+A node that can be used to manually publish saved point cloud to `pcl_processing` node from selected point cloud files(.ply), in order to manually evaluate tested data/point clouds.
 use Key P to initiate UI and load desired pairs of point cloud for evaluation. The point clouds are also visualize in rviz.
 
 Parameters:
